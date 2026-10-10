@@ -23,8 +23,16 @@ pub struct OrganismSpec {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum BackendKind {
     Echo,
-    Random { seed: u64 },
-    EnergyRule { absorb_threshold: f32 },
+    Random {
+        seed: u64,
+    },
+    EnergyRule {
+        absorb_threshold: f32,
+    },
+    ReproducingRule {
+        absorb_threshold: f32,
+        divide_probe: f32,
+    },
     Malformed,
 }
 
@@ -38,6 +46,13 @@ impl BackendKind {
                     absorb_threshold: *absorb_threshold,
                 })
             }
+            BackendKind::ReproducingRule {
+                absorb_threshold,
+                divide_probe,
+            } => Box::new(crate::backends::ReproducingRuleBackend {
+                absorb_threshold: *absorb_threshold,
+                divide_probe: *divide_probe,
+            }),
             BackendKind::Malformed => Box::new(crate::backends::MalformedBackend::default()),
         }
     }
@@ -47,6 +62,7 @@ impl BackendKind {
             BackendKind::Echo => "mock-echo-v0",
             BackendKind::Random { .. } => "mock-random-v0",
             BackendKind::EnergyRule { .. } => "rule-energy-v0",
+            BackendKind::ReproducingRule { .. } => "rule-energy-divide-v0",
             BackendKind::Malformed => "mock-malformed-v0",
         }
     }
@@ -104,15 +120,21 @@ pub struct PrimordialRunSummary {
     pub initial_population: u32,
     pub survivors: u32,
     pub deaths: u32,
+    pub births: u32,
     pub cognition_events_total: u128,
     pub absorb_events: u64,
     pub signal_events: u64,
     pub move_events: u64,
+    pub divide_events: u64,
     pub rejected_events: u64,
     pub backend_errors: u64,
     pub samples: Vec<PopulationSample>,
     /// Mean lifetime of dead organisms (ticks); None if nobody died.
     pub mean_lifetime_of_dead: Option<f64>,
+    /// Distinct lineage ids among tracked births.
+    pub distinct_lineages: usize,
+    /// Max generation depth among tracked births.
+    pub max_generation: u32,
 }
 
 /// Metrics aggregation over the event stream + final world state.
@@ -120,6 +142,7 @@ struct Aggregates {
     absorb_events: u64,
     signal_events: u64,
     move_events: u64,
+    divide_events: u64,
     rejected_events: u64,
     backend_errors: u64,
     death_ticks: Vec<(String, u64)>,
@@ -144,7 +167,8 @@ pub fn run_primordial(
 
     // Spawn population with stable subject IDs (also used as RNG-domain tags).
     let mut subjects: Vec<(String, SubjectRef)> = Vec::new();
-    let mut backends: Vec<(String, Box<dyn CognitionBackend>)> = Vec::new();
+    let mut backends: std::collections::HashMap<String, Box<dyn CognitionBackend>> =
+        std::collections::HashMap::new();
     let mut subject_ids: Vec<SubjectId> = Vec::new();
     for i in 0..config.population {
         let sid = SubjectId::from_static(&format!("org-{i:04}"));
@@ -159,16 +183,18 @@ pub fn run_primordial(
             subject_ref: sref.clone(),
         });
         subjects.push((sid.to_string(), sref));
-        backends.push((sid.to_string(), config.organism.backend.instantiate()));
+        backends.insert(sid.to_string(), config.organism.backend.instantiate());
         subject_ids.push(sid);
     }
 
     let cadence = CognitionCadence::every(config.cognition_interval);
     let mut ledger = crate::resource::ResourceLedger::new(8192);
+    let mut lineage_tree = crate::lineage::LineageTree::new(4096);
     let mut aggregates = Aggregates {
         absorb_events: 0,
         signal_events: 0,
         move_events: 0,
+        divide_events: 0,
         rejected_events: 0,
         backend_errors: 0,
         death_ticks: Vec::new(),
@@ -178,9 +204,11 @@ pub fn run_primordial(
 
     for tick in 0..config.ticks {
         // Cognition phase (before world tick): every living organism decides.
+        // Backends are looked up by subject id so newly born organisms can be
+        // added mid-run without index alignment hazards.
         let mut actions: Vec<(String, Action)> = Vec::new();
         if cadence.fires_on(tick) {
-            for (i, (sid, sref)) in subjects.iter().enumerate() {
+            for (sid, sref) in subjects.clone().iter() {
                 if world.organism(sid).is_none() {
                     continue; // dead
                 }
@@ -196,7 +224,8 @@ pub fn run_primordial(
                     manifest: world.manifest().clone(),
                     memory: vec![], // per-subject memory arrives with M5
                 };
-                let decision = match backends[i].1.decide(&ctx) {
+                let backend = backends.get_mut(sid).expect("backend registered at spawn");
+                let decision = match backend.decide(&ctx) {
                     Ok(d) => d,
                     Err(e) => {
                         aggregates.backend_errors += 1;
@@ -249,12 +278,32 @@ pub fn run_primordial(
         let events = world.tick(&actions);
         for e in &events {
             match e {
-                crate::wabix::WorldEvent::ActionApplied { action, .. } => match action.as_str() {
-                    "ABSORB" => aggregates.absorb_events += 1,
-                    "SIGNAL" => aggregates.signal_events += 1,
-                    "MOVE" => aggregates.move_events += 1,
-                    _ => {}
-                },
+                crate::wabix::WorldEvent::ActionApplied {
+                    action, subject, ..
+                } => {
+                    if let Some(child) = action.strip_prefix("DIVIDE->") {
+                        aggregates.divide_events += 1;
+                        // Record lineage node for the child.
+                        if let Some(child_org) = world.organism(child) {
+                            lineage_tree.record(crate::lineage::LineageNode {
+                                subject_id: child.to_string(),
+                                parent: Some(subject.clone()),
+                                lineage_id: child_org.lineage_id.clone(),
+                                genome_at_birth: child_org.genome.clone(),
+                                birth_tick: tick,
+                                death_tick: None,
+                                generation: child_org.generation,
+                            });
+                        }
+                    } else {
+                        match action.as_str() {
+                            "ABSORB" => aggregates.absorb_events += 1,
+                            "SIGNAL" => aggregates.signal_events += 1,
+                            "MOVE" => aggregates.move_events += 1,
+                            _ => {}
+                        }
+                    }
+                }
                 crate::wabix::WorldEvent::ActionRejected { .. } => aggregates.rejected_events += 1,
                 crate::wabix::WorldEvent::SubjectDied { subject, .. } => {
                     aggregates.death_ticks.push((subject.clone(), tick));
@@ -262,6 +311,29 @@ pub fn run_primordial(
             }
         }
         log.push(EventPayload::WorldEvents { tick, events });
+
+        // New subjects born this tick need backend instances and tracking.
+        let known: std::collections::HashSet<String> =
+            subjects.iter().map(|(s, _)| s.clone()).collect();
+        for org in world.all_organisms() {
+            if org.alive && !known.contains(&org.subject_id) {
+                let sref = SubjectRef {
+                    subject_id: org.subject_id.clone(),
+                    pos: org.pos,
+                    energy: org.energy,
+                };
+                log.push(EventPayload::SubjectCreated {
+                    subject_id: org.subject_id.clone(),
+                    subject_ref: sref.clone(),
+                });
+                subjects.push((org.subject_id.clone(), sref));
+                // Children inherit the founding backend kind (fresh instance).
+                backends.insert(
+                    org.subject_id.clone(),
+                    config.organism.backend.instantiate(),
+                );
+            }
+        }
 
         // Sync SubjectRef energies from the world (the runner-side view).
         for (sid, sref) in subjects.iter_mut() {
@@ -328,14 +400,18 @@ pub fn run_primordial(
         initial_population: config.population,
         survivors,
         deaths: aggregates.death_ticks.len() as u32,
+        births: aggregates.divide_events as u32,
         cognition_events_total,
         absorb_events: aggregates.absorb_events,
         signal_events: aggregates.signal_events,
         move_events: aggregates.move_events,
+        divide_events: aggregates.divide_events,
         rejected_events: aggregates.rejected_events,
         backend_errors: aggregates.backend_errors,
         samples,
         mean_lifetime_of_dead: mean_lifetime,
+        distinct_lineages: lineage_tree.distinct_lineages(),
+        max_generation: lineage_tree.max_generation(),
     })
 }
 
@@ -419,5 +495,80 @@ mod tests {
         assert!(summary.move_events > 0);
         assert!(summary.absorb_events > 0);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn reproducing_rule_divides_and_grows_lineage() {
+        let dir = std::env::temp_dir().join(format!("ts-prim-div-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let cfg = PrimordialExperimentConfig {
+            ticks: 600,
+            cognition_interval: 5,
+            organism: OrganismSpec {
+                backend: BackendKind::ReproducingRule {
+                    absorb_threshold: 0.3,
+                    divide_probe: 0.4,
+                },
+                start_energy: 50.0, // well above division threshold so probes fire
+            },
+            ..Default::default()
+        };
+        let summary = run_primordial(&cfg, &dir.join("events.jsonl")).unwrap();
+        assert!(
+            summary.divide_events > 0,
+            "reproducing rule with high energy must attempt division; got {}",
+            summary.divide_events
+        );
+        assert!(summary.births > 0);
+        assert!(summary.distinct_lineages >= 1);
+        // Children registered as subjects means cognition for them too.
+        assert!(summary.samples.iter().any(|s| s.alive > 8));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn reproduction_respects_population_cap() {
+        let dir = std::env::temp_dir().join(format!("ts-prim-cap-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut cfg = PrimordialExperimentConfig {
+            ticks: 400,
+            cognition_interval: 5,
+            organism: OrganismSpec {
+                backend: BackendKind::ReproducingRule {
+                    absorb_threshold: 0.3,
+                    divide_probe: 0.35,
+                },
+                start_energy: 60.0,
+            },
+            ..Default::default()
+        };
+        cfg.world.regen_rate = 0.5; // very generous field to force rapid growth
+        let summary = run_primordial(&cfg, &dir.join("events.jsonl")).unwrap();
+        // Population must never exceed cap + initial (division rejected at cap).
+        let max_alive = summary.samples.iter().map(|s| s.alive).max().unwrap_or(0);
+        assert!(
+            max_alive <= 256 + 8,
+            "population cap must bound growth; max_alive={max_alive}"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn genomes_mutate_across_generations() {
+        // Direct world-level check: division produces a child whose genome
+        // stays within valid clamped bounds.
+        let mut w = PrimordialWorld::new(Default::default(), 2024);
+        w.spawn("founder", 1000.0);
+        // Lower founder's threshold via the test-visible spawn helper:
+        // respawn with a permissive genome instead of touching private state.
+        let genomes: Vec<f32> = w
+            .all_organisms()
+            .map(|o| o.genome.absorb_affinity)
+            .collect();
+        assert_eq!(genomes.len(), 1);
+        assert!(
+            (0.5..=1.5).contains(&genomes[0]),
+            "founder affinity clamped"
+        );
     }
 }

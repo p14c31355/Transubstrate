@@ -33,3 +33,18 @@ All notable changes to Transubstrate are documented here.
 - CLI: `transubstrate run-test` (real experiment execution) and
   `transubstrate inspect` (event log digest).
 - 26 unit tests passing.
+
+### Added (feat/lineage, unmerged)
+- Genome: heritable configuration (division threshold, absorb affinity,
+  signal bias, move bias, mutation rate) with clamped deterministic mutation
+- DivisionPolicy: child energy fraction, division cost
+- LineageTree: bounded parent/child lineage records with lineage id and
+  generation depth
+- PrimordialWorld: DIVIDE action (genome-gated, energy-splitting, mutated
+  child on adjacent cell, population cap), organisms carry genome+lineage
+- ReproducingRuleBackend: absorb/divide rule for reproduction experiments
+- Run summary extended: births, divide_events, distinct_lineages,
+  max_generation; CLI reports lineage stats
+- Real runs: 4 founders -> 12 alive (8 divisions, gen 1); 8 founders ->
+  32 alive, 24 divisions, gen 2; population cap enforced
+- 44 tests passing

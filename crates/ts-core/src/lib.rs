@@ -6,6 +6,7 @@ pub mod cognition;
 pub mod event_log;
 pub mod experiment;
 pub mod ids;
+pub mod lineage;
 pub mod primordial;
 pub mod primordial_experiment;
 pub mod resource;

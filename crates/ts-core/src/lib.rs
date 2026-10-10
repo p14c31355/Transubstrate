@@ -11,6 +11,7 @@ pub mod lineage;
 pub mod migration_experiment;
 pub mod primordial;
 pub mod primordial_experiment;
+pub mod replay;
 pub mod resource;
 pub mod rng;
 pub mod runtime;

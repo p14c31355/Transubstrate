@@ -48,3 +48,18 @@ All notable changes to Transubstrate are documented here.
 - Real runs: 4 founders -> 12 alive (8 divisions, gen 1); 8 founders ->
   32 alive, 24 divisions, gen 2; population cap enforced
 - 44 tests passing
+
+### Added (feat/continuity-migration, unmerged)
+- MigrationEvent with deterministic content-hash id (replay-stable)
+- ContinuityVector: interpretable per-dimension continuity with documented
+  computation strings; documented_aggregate preserves components and marks
+  its own arbitrariness
+- BehaviorFingerprint: normalized action distributions, L1 distance
+- Migration experiment harness: A/B with two controls (same-seed same-backend
+  control contrast); migration effect = migration continuity - control
+  continuity
+- CLI run-migration command
+- Real runs: echo->energy-rule gives continuity 0.0 / effect -1.0 (full
+  behavior change); echo->echo gives continuity 1.0 / effect 0.0 (identical
+  to control) — harness calibration confirmed
+- 54 tests passing

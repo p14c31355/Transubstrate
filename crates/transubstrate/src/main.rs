@@ -63,6 +63,25 @@ enum Commands {
         #[arg(long, default_value = "runs")]
         out: PathBuf,
     },
+    /// Run the controller-migration continuity experiment (M5).
+    RunMigration {
+        #[arg(long, default_value_t = 400)]
+        ticks: u64,
+        #[arg(long, default_value_t = 5)]
+        cognition_interval: u64,
+        /// Backend before migration: echo | random | energy-rule
+        #[arg(long, default_value = "echo")]
+        backend_a: String,
+        /// Backend after migration: echo | random | energy-rule
+        #[arg(long, default_value = "energy-rule")]
+        backend_b: String,
+        #[arg(long, default_value_t = 42)]
+        seed: u64,
+        #[arg(long, default_value_t = 30.0)]
+        energy: f32,
+        #[arg(long, default_value = "runs")]
+        out: PathBuf,
+    },
     /// Print the event log of a finished experiment as a human-readable digest.
     Inspect {
         /// Path to the events.jsonl file.
@@ -103,6 +122,23 @@ fn parse_primordial_backend(
         }),
         other => Err(format!(
             "unknown backend '{other}' (expected echo|random|energy-rule|reproducing-rule)"
+        )),
+    }
+}
+
+fn parse_migration_backend(
+    name: &str,
+    seed: u64,
+) -> Result<ts_core::primordial_experiment::BackendKind, String> {
+    use ts_core::primordial_experiment::BackendKind as PB;
+    match name {
+        "echo" => Ok(PB::Echo),
+        "random" => Ok(PB::Random { seed }),
+        "energy-rule" => Ok(PB::EnergyRule {
+            absorb_threshold: 0.3,
+        }),
+        other => Err(format!(
+            "unknown backend '{other}' (expected echo|random|energy-rule)"
         )),
     }
 }
@@ -231,6 +267,75 @@ fn main() {
                             last.mean_energy
                         );
                     }
+                    println!("event log: {}", log_path.display());
+                }
+                Err(e) => {
+                    eprintln!("experiment failed: {e}");
+                    std::process::exit(1);
+                }
+            }
+        }
+        Commands::RunMigration {
+            ticks,
+            cognition_interval,
+            backend_a,
+            backend_b,
+            seed,
+            energy,
+            out,
+        } => {
+            let bk_a = match parse_migration_backend(&backend_a, seed) {
+                Ok(b) => b,
+                Err(e) => {
+                    eprintln!("{e}");
+                    std::process::exit(2);
+                }
+            };
+            let bk_b = match parse_migration_backend(&backend_b, seed) {
+                Ok(b) => b,
+                Err(e) => {
+                    eprintln!("{e}");
+                    std::process::exit(2);
+                }
+            };
+            let config = ts_core::migration_experiment::MigrationExperimentConfig {
+                experiment_id: ExperimentId::generate(),
+                world: Default::default(),
+                world_seed: seed,
+                ticks,
+                cognition_interval,
+                start_energy: energy,
+                backend_a: bk_a,
+                backend_b: bk_b,
+            };
+            let id = config.experiment_id.to_string();
+            let log_path = out.join(&id).join("events.jsonl");
+            match ts_core::migration_experiment::run_migration_experiment(&config, &log_path) {
+                Ok(result) => {
+                    let mig = result.migration.as_ref().unwrap();
+                    println!("experiment: {}", result.experiment_id);
+                    println!(
+                        "migration:  {} {} -> {} at tick {}",
+                        mig.dimension, mig.from, mig.to, mig.tick
+                    );
+                    println!("migration id: {}", mig.migration_id);
+                    for phase in &result.migration_run.phases {
+                        println!(
+                            "  phase {}: backend={} actions={} survived={}",
+                            phase.label, phase.backend_id, phase.actions_taken, phase.survived
+                        );
+                    }
+                    let dim = &result.continuity.dimensions[0];
+                    println!("continuity (behavioral): {:.4}", dim.value);
+                    println!("  computation: {}", dim.computation);
+                    println!(
+                        "control continuity (no migration): {:.4}",
+                        result.control_continuity.value
+                    );
+                    println!(
+                        "migration effect (migration - control): {:+.4}",
+                        result.migration_effect
+                    );
                     println!("event log: {}", log_path.display());
                 }
                 Err(e) => {

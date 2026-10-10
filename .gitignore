@@ -1,0 +1,43 @@
+# Rust
+/target/
+**/*.rs.bk
+cargo-timing*.html
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Model weights and checkpoints (never commit)
+*.gguf
+*.safetensors
+*.bin
+*.pt
+*.pth
+*.onnx
+*.ckpt
+models/
+checkpoints/
+
+# Experiment runs and results (curated fixtures go elsewhere, small and explicit)
+runs/
+results/
+*.jsonl.gz
+
+# Local databases
+*.db
+*.sqlite
+
+# Secrets and environment
+.env
+.env.*
+*.key
+secrets/
+
+# Editor / OS metadata
+.idea/
+.vscode/
+*.swp
+.DS_Store

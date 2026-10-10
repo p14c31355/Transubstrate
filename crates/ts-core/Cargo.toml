@@ -1,0 +1,16 @@
+[package]
+name = "ts-core"
+description = "Core types, subject runtime, WABIX, worlds, and resource accounting for Transubstrate"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+approx = "0.5"

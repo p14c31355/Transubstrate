@@ -44,6 +44,25 @@ enum Commands {
         #[arg(long, default_value = "runs")]
         out: PathBuf,
     },
+    /// Run the primordial ALife experiment (M3).
+    RunPrimordial {
+        #[arg(long, default_value_t = 1000)]
+        ticks: u64,
+        #[arg(long, default_value_t = 10)]
+        cognition_interval: u64,
+        #[arg(long, default_value_t = 8)]
+        population: u32,
+        /// Cognition backend: echo | random | energy-rule
+        #[arg(long, default_value = "energy-rule")]
+        backend: String,
+        #[arg(long, default_value_t = 42)]
+        seed: u64,
+        /// Starting energy per organism.
+        #[arg(long, default_value_t = 10.0)]
+        energy: f32,
+        #[arg(long, default_value = "runs")]
+        out: PathBuf,
+    },
     /// Print the event log of a finished experiment as a human-readable digest.
     Inspect {
         /// Path to the events.jsonl file.
@@ -63,6 +82,23 @@ fn parse_backend(name: &str, seed: u64) -> Result<BackendKind, String> {
         "malformed" => Ok(BackendKind::Malformed),
         other => Err(format!(
             "unknown backend '{other}' (expected echo|random|energy-rule|malformed)"
+        )),
+    }
+}
+
+fn parse_primordial_backend(
+    name: &str,
+    seed: u64,
+) -> Result<ts_core::primordial_experiment::BackendKind, String> {
+    use ts_core::primordial_experiment::BackendKind as PB;
+    match name {
+        "echo" => Ok(PB::Echo),
+        "random" => Ok(PB::Random { seed }),
+        "energy-rule" => Ok(PB::EnergyRule {
+            absorb_threshold: 0.5,
+        }),
+        other => Err(format!(
+            "unknown backend '{other}' (expected echo|random|energy-rule)"
         )),
     }
 }
@@ -112,6 +148,77 @@ fn main() {
                     println!("backend errors: {}", summary.backend_errors);
                     println!("final energy:   {:.2}", summary.final_energy);
                     println!("final counter:  {:.2}", summary.final_counter);
+                    println!("event log: {}", log_path.display());
+                }
+                Err(e) => {
+                    eprintln!("experiment failed: {e}");
+                    std::process::exit(1);
+                }
+            }
+        }
+        Commands::RunPrimordial {
+            ticks,
+            cognition_interval,
+            population,
+            backend,
+            seed,
+            energy,
+            out,
+        } => {
+            let backend_kind = match parse_primordial_backend(&backend, seed) {
+                Ok(b) => b,
+                Err(e) => {
+                    eprintln!("{e}");
+                    std::process::exit(2);
+                }
+            };
+            let config = ts_core::primordial_experiment::PrimordialExperimentConfig {
+                experiment_id: ExperimentId::generate(),
+                world: Default::default(),
+                world_seed: seed,
+                ticks,
+                cognition_interval,
+                population,
+                organism: ts_core::primordial_experiment::OrganismSpec {
+                    backend: backend_kind,
+                    start_energy: energy,
+                },
+            };
+            let id = config.experiment_id.to_string();
+            let dir = out.join(&id);
+            let log_path = dir.join("events.jsonl");
+            match ts_core::primordial_experiment::run_primordial(&config, &log_path) {
+                Ok(summary) => {
+                    println!("experiment: {}", summary.experiment_id);
+                    println!("backend:    {backend}");
+                    println!("ticks:      {}", summary.ticks_executed);
+                    println!(
+                        "population: {} initial, {} survivors, {} deaths",
+                        summary.initial_population, summary.survivors, summary.deaths
+                    );
+                    if let Some(ml) = summary.mean_lifetime_of_dead {
+                        println!("mean lifetime of dead: {ml:.1} ticks");
+                    }
+                    println!(
+                        "actions: absorb={} signal={} move={} rejected={} backend_errors={}",
+                        summary.absorb_events,
+                        summary.signal_events,
+                        summary.move_events,
+                        summary.rejected_events,
+                        summary.backend_errors
+                    );
+                    println!("cognition events total: {}", summary.cognition_events_total);
+                    if let (Some(first), Some(last)) =
+                        (summary.samples.first(), summary.samples.last())
+                    {
+                        println!(
+                            "field energy: {:.0} -> {:.0}; mean org energy: {:.2} -> {:.2}",
+                            first.field_energy,
+                            last.field_energy,
+                            first.mean_energy,
+                            last.mean_energy
+                        );
+                    }
                     println!("event log: {}", log_path.display());
                 }
                 Err(e) => {

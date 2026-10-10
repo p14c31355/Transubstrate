@@ -31,6 +31,12 @@ impl Rng {
     pub fn next_range(&mut self, n: u64) -> u64 {
         self.next_u64() % n.max(1)
     }
+
+    /// Read the current state without advancing it (for deterministic
+    /// observation functions derived from world state).
+    pub fn peek_state(&self) -> u64 {
+        self.state
+    }
 }
 
 #[cfg(test)]

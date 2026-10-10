@@ -102,7 +102,7 @@ impl Default for PrimordialExperimentConfig {
 }
 
 /// Population-level metrics over time (one sample per recorded tick).
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct PopulationSample {
     pub tick: u64,
     pub alive: u32,

@@ -63,3 +63,14 @@ All notable changes to Transubstrate are documented here.
   behavior change); echo->echo gives continuity 1.0 / effect 0.0 (identical
   to control) — harness calibration confirmed
 - 54 tests passing
+
+### Added (feat/replay, unmerged)
+- ExperimentManifest: machine-readable, versioned re-execution record
+- Metrics regeneration from event logs without cognition re-execution
+  (RegeneratedMetrics: decisions, action distribution, deaths, births,
+  migrations, population samples)
+- Log integrity verification (sequential seq numbers, schema version)
+- CLI replay + verify commands
+- Verified against real logs: regenerated ABSORB count == run summary
+  count; migration logs count 1 migration; tampered seq detected
+- 59 tests passing

@@ -82,6 +82,16 @@ enum Commands {
         #[arg(long, default_value = "runs")]
         out: PathBuf,
     },
+    /// Regenerate metrics from an event log without re-running cognition (M6).
+    Replay {
+        /// Path to the events.jsonl file.
+        path: PathBuf,
+    },
+    /// Verify event-log structural integrity (seq numbers, version).
+    Verify {
+        /// Path to the events.jsonl file.
+        path: PathBuf,
+    },
     /// Print the event log of a finished experiment as a human-readable digest.
     Inspect {
         /// Path to the events.jsonl file.
@@ -344,6 +354,52 @@ fn main() {
                 }
             }
         }
+        Commands::Replay { path } => match ts_core::replay::regenerate_metrics(&path) {
+            Ok(m) => {
+                println!("total records:        {}", m.total_records);
+                println!("subjects created:     {}", m.subjects_created);
+                println!(
+                    "decisions:            {} (with action: {}, no action: {})",
+                    m.decisions, m.decisions_with_action, m.decisions_no_action
+                );
+                println!("action distribution:");
+                for (name, count) in &m.action_distribution {
+                    println!("  {name}: {count}");
+                }
+                println!("deaths:               {}", m.deaths);
+                println!("births (divisions):   {}", m.births);
+                println!("migrations:           {}", m.migrations);
+                println!(
+                    "finish:               {} ({})",
+                    m.experiments_finished,
+                    m.finish_reason.as_deref().unwrap_or("<none>")
+                );
+                println!(
+                    "tick range:           {:?}..={:?}",
+                    m.first_tick, m.last_tick
+                );
+                println!("population samples:   {}", m.population_samples.len());
+            }
+            Err(e) => {
+                eprintln!("replay failed: {e}");
+                std::process::exit(1);
+            }
+        },
+        Commands::Verify { path } => match ts_core::replay::verify_log_integrity(&path) {
+            Ok(r) => {
+                println!("records:      {}", r.records);
+                println!("seq ok:       {}", r.seq_ok);
+                println!("version ok:   {} (v{})", r.version_ok, r.log_version_seen);
+                println!("first bad seq: {:?}", r.first_bad_seq);
+                if !r.seq_ok || !r.version_ok {
+                    std::process::exit(1);
+                }
+            }
+            Err(e) => {
+                eprintln!("verify failed: {e}");
+                std::process::exit(1);
+            }
+        },
         Commands::Inspect { path, tail } => {
             let records = match ts_core::event_log::read_log(&path) {
                 Ok(r) => r,

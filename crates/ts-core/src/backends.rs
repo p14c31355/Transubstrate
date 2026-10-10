@@ -156,6 +156,69 @@ impl CognitionBackend for EnergyRuleBackend {
     }
 }
 
+/// Reproducing variant of the energy rule: ABSORB when energy channel is
+/// high, DIVIDE when the (normalized) energy store is very high. The world
+/// enforces the real division threshold; this rule just proposes DIVIDE at
+/// a normalized probe point, giving the genome control over timing.
+#[derive(Clone, Debug)]
+pub struct ReproducingRuleBackend {
+    /// local_energy observation above which the rule absorbs.
+    pub absorb_threshold: f32,
+    /// local_energy observation above which the rule proposes DIVIDE.
+    pub divide_probe: f32,
+}
+
+impl Default for ReproducingRuleBackend {
+    fn default() -> Self {
+        Self {
+            absorb_threshold: 0.3,
+            // local_energy is organism energy / 10 clamped to 1.0; 3.0 raw
+            // energy maps to 0.3. Default probe 0.4 = ~4.0 raw energy, below
+            // the default division threshold (40), so world genomes govern.
+            divide_probe: 0.4,
+        }
+    }
+}
+
+impl CognitionBackend for ReproducingRuleBackend {
+    fn implementation(&self) -> &'static str {
+        "rule-energy-divide-v0"
+    }
+
+    fn decide(&mut self, ctx: &DecisionContext) -> Result<Decision, CognitionError> {
+        let energy_seen = ctx
+            .observations
+            .iter()
+            .find(|o| o.channel == "local_energy")
+            .map(|o| o.value)
+            .unwrap_or(0.0);
+
+        let pick = |ctx: &DecisionContext, name: &str, params: Vec<f32>| {
+            ctx.manifest
+                .actions
+                .iter()
+                .find(|a| a.name == name)
+                .map(|schema| Action {
+                    name: schema.name.clone(),
+                    params: if schema.arity == 0 { vec![] } else { params },
+                })
+        };
+
+        let (action, why) = if energy_seen >= self.divide_probe {
+            (pick(ctx, "DIVIDE", vec![]), "divide")
+        } else if energy_seen > self.absorb_threshold {
+            (pick(ctx, "ABSORB", vec![1.0]), "absorb")
+        } else {
+            (pick(ctx, "WAIT", vec![]), "wait")
+        };
+
+        Ok(Decision {
+            action,
+            rationale: format!("rule(repro): local_energy={energy_seen:.3} -> {why}"),
+        })
+    }
+}
+
 /// A deliberately broken backend used to test safe failure paths: it returns
 /// malformed/invalid decisions so the runtime must reject them without
 /// corrupting state.

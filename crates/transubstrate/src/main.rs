@@ -97,8 +97,12 @@ fn parse_primordial_backend(
         "energy-rule" => Ok(PB::EnergyRule {
             absorb_threshold: 0.5,
         }),
+        "reproducing-rule" => Ok(PB::ReproducingRule {
+            absorb_threshold: 0.3,
+            divide_probe: 0.4,
+        }),
         other => Err(format!(
-            "unknown backend '{other}' (expected echo|random|energy-rule)"
+            "unknown backend '{other}' (expected echo|random|energy-rule|reproducing-rule)"
         )),
     }
 }
@@ -193,17 +197,25 @@ fn main() {
                     println!("backend:    {backend}");
                     println!("ticks:      {}", summary.ticks_executed);
                     println!(
-                        "population: {} initial, {} survivors, {} deaths",
-                        summary.initial_population, summary.survivors, summary.deaths
+                        "population: {} initial, {} survivors, {} deaths, {} births",
+                        summary.initial_population,
+                        summary.survivors,
+                        summary.deaths,
+                        summary.births
                     );
                     if let Some(ml) = summary.mean_lifetime_of_dead {
                         println!("mean lifetime of dead: {ml:.1} ticks");
                     }
                     println!(
-                        "actions: absorb={} signal={} move={} rejected={} backend_errors={}",
+                        "lineage: {} distinct, max generation {}",
+                        summary.distinct_lineages, summary.max_generation
+                    );
+                    println!(
+                        "actions: absorb={} signal={} move={} divide={} rejected={} backend_errors={}",
                         summary.absorb_events,
                         summary.signal_events,
                         summary.move_events,
+                        summary.divide_events,
                         summary.rejected_events,
                         summary.backend_errors
                     );

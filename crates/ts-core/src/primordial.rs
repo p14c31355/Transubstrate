@@ -13,6 +13,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::lineage::{DivisionPolicy, Genome, attempt_division};
 use crate::rng::Rng;
 use crate::wabix::{
     Action, CapabilityManifest, ManifestBuilder, Observation, SubjectRef, WabixError, World,
@@ -32,6 +33,7 @@ pub fn primordial_manifest() -> CapabilityManifest {
         .action("RELEASE", 1, vec![(0.0, 1.0)])
         .action("SIGNAL", 1, vec![(0.0, 1.0)])
         .action("MOVE", 2, vec![(0.0, 1.0), (0.0, 1.0)])
+        .action("DIVIDE", 0, vec![])
         .build()
 }
 
@@ -78,6 +80,12 @@ pub struct Organism {
     /// Energy store, in world units (starts at start_energy, dies at <= 0).
     pub energy: f32,
     pub alive: bool,
+    /// Heritable genome (M4).
+    pub genome: Genome,
+    /// Lineage id (shared with parent); founders get their own.
+    pub lineage_id: String,
+    /// Generation depth from founder.
+    pub generation: u32,
 }
 
 /// The primordial world.
@@ -93,6 +101,12 @@ pub struct PrimordialWorld {
     organisms: Vec<Organism>,
     rng: Rng,
     pub tick: u64,
+    /// Division policy for M4 reproduction.
+    pub division_policy: DivisionPolicy,
+    /// Population cap: division is rejected when this is reached.
+    pub population_cap: usize,
+    /// Internal counter for generating child ids deterministically.
+    child_counter: u64,
 }
 
 /// Energy field stores arbitrary positive floats; observations normalize to
@@ -112,6 +126,9 @@ impl PrimordialWorld {
             manifest,
             config,
             tick: 0,
+            division_policy: DivisionPolicy::default(),
+            population_cap: 256,
+            child_counter: 0,
         }
     }
 
@@ -119,18 +136,42 @@ impl PrimordialWorld {
         (y * self.config.width + x) as usize
     }
 
-    /// Spawn an organism at a random unoccupied-ish cell with start energy.
+    /// Spawn a founder organism with the default genome.
     pub fn spawn(&mut self, subject_id: &str, start_energy: f32) -> (u32, u32) {
         let x = self.rng.next_range(self.config.width as u64) as u32;
         let y = self.rng.next_range(self.config.height as u64) as u32;
         let pos = (x, y);
+        self.spawn_with_genome_at(
+            subject_id,
+            pos,
+            start_energy,
+            Genome::default(),
+            subject_id.to_string(), // founders start their own lineage
+            0,
+        );
+        pos
+    }
+
+    /// Spawn with explicit genome/lineage/generation at a position (used by
+    /// division; the child is placed on a random adjacent free cell).
+    pub fn spawn_with_genome_at(
+        &mut self,
+        subject_id: &str,
+        pos: (u32, u32),
+        energy: f32,
+        genome: Genome,
+        lineage_id: String,
+        generation: u32,
+    ) {
         self.organisms.push(Organism {
             subject_id: subject_id.into(),
             pos,
-            energy: start_energy,
+            energy,
             alive: true,
+            genome,
+            lineage_id,
+            generation,
         });
-        pos
     }
 
     pub fn organism(&self, subject_id: &str) -> Option<&Organism> {
@@ -304,6 +345,73 @@ impl PrimordialWorld {
                         action: "MOVE".into(),
                         reason: "insufficient energy for move cost".into(),
                     });
+                }
+            }
+            "DIVIDE" => {
+                // M4 reproduction: genome-gated, energy-split, mutated child.
+                if self.organisms.len() >= self.population_cap {
+                    events.push(WorldEvent::ActionRejected {
+                        subject: subject.clone(),
+                        action: "DIVIDE".into(),
+                        reason: "population cap reached".into(),
+                    });
+                } else {
+                    let (
+                        parent_energy,
+                        parent_genome,
+                        parent_lineage,
+                        parent_generation,
+                        parent_pos,
+                    ) = {
+                        let p = &self.organisms[org_idx];
+                        (
+                            p.energy,
+                            p.genome.clone(),
+                            p.lineage_id.clone(),
+                            p.generation,
+                            p.pos,
+                        )
+                    };
+                    match attempt_division(parent_energy, &parent_genome, &self.division_policy) {
+                        Ok(child_energy) => {
+                            // Deduct child share + cost from parent.
+                            self.organisms[org_idx].energy =
+                                parent_energy - self.division_policy.division_cost - child_energy;
+                            // Mutated child genome.
+                            let child_genome = parent_genome.mutate(&mut self.rng);
+                            // Child placed on a random adjacent cell (or same
+                            // cell if the parent is at the edge).
+                            let neighbors = self.neighbors4(parent_pos.0, parent_pos.1);
+                            let (cx, cy) = if neighbors.is_empty() {
+                                parent_pos
+                            } else {
+                                let pick = self.rng.next_range(neighbors.len() as u64) as usize;
+                                neighbors[pick]
+                            };
+                            let child_id = format!("org-{:06}", self.child_counter);
+                            self.child_counter += 1;
+                            self.spawn_with_genome_at(
+                                &child_id,
+                                (cx, cy),
+                                child_energy,
+                                child_genome,
+                                parent_lineage,
+                                parent_generation + 1,
+                            );
+                            events.push(WorldEvent::ActionApplied {
+                                subject: subject.clone(),
+                                action: format!("DIVIDE->{child_id}"),
+                                cost: self.division_policy.division_cost,
+                            });
+                        }
+                        Err(reason) => {
+                            events.push(WorldEvent::ActionRejected {
+                                subject: subject.clone(),
+                                action: "DIVIDE".into(),
+                                reason,
+                            });
+                        }
+                    }
                 }
             }
             other => {

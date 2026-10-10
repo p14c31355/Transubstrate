@@ -1,4 +1,207 @@
+//! Transubstrate CLI: run experiments, inspect summaries.
+
+use clap::{Parser, Subcommand};
+use std::path::PathBuf;
+
+use ts_core::event_log::EventPayload;
+use ts_core::experiment::{BackendKind, ExperimentConfig, run};
+use ts_core::ids::ExperimentId;
+
+#[derive(Parser)]
+#[command(
+    name = "transubstrate",
+    version,
+    about = "Persistent artificial subjects: experiments CLI"
+)]
+struct Cli {
+    #[command(subcommand)]
+    command: Commands,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    /// Run a vertical-slice experiment in the deterministic test world.
+    RunTest {
+        /// Number of world ticks to execute.
+        #[arg(long, default_value_t = 100)]
+        ticks: u64,
+        /// Cognition fires every N ticks.
+        #[arg(long, default_value_t = 4)]
+        cognition_interval: u64,
+        /// Cognition backend: echo | random | energy-rule | malformed
+        #[arg(long, default_value = "echo")]
+        backend: String,
+        /// Seed for seeded backends and the world.
+        #[arg(long, default_value_t = 42)]
+        seed: u64,
+        /// Maintenance energy cost per tick.
+        #[arg(long, default_value_t = 0.01)]
+        maintenance: f32,
+        /// Starting energy.
+        #[arg(long, default_value_t = 1000.0)]
+        energy: f32,
+        /// Output directory for the event log (default: runs/).
+        #[arg(long, default_value = "runs")]
+        out: PathBuf,
+    },
+    /// Print the event log of a finished experiment as a human-readable digest.
+    Inspect {
+        /// Path to the events.jsonl file.
+        path: PathBuf,
+        #[arg(long, default_value_t = 20)]
+        tail: usize,
+    },
+}
+
+fn parse_backend(name: &str, seed: u64) -> Result<BackendKind, String> {
+    match name {
+        "echo" => Ok(BackendKind::Echo),
+        "random" => Ok(BackendKind::Random { seed }),
+        "energy-rule" => Ok(BackendKind::EnergyRule {
+            absorb_threshold: 0.5,
+        }),
+        "malformed" => Ok(BackendKind::Malformed),
+        other => Err(format!(
+            "unknown backend '{other}' (expected echo|random|energy-rule|malformed)"
+        )),
+    }
+}
+
 fn main() {
-    // Placeholder CLI; real experiment commands arrive with M2.
-    println!("transubstrate: persistent artificial subjects (in development)");
+    let cli = Cli::parse();
+    match cli.command {
+        Commands::RunTest {
+            ticks,
+            cognition_interval,
+            backend,
+            seed,
+            maintenance,
+            energy,
+            out,
+        } => {
+            let backend_kind = match parse_backend(&backend, seed) {
+                Ok(b) => b,
+                Err(e) => {
+                    eprintln!("{e}");
+                    std::process::exit(2);
+                }
+            };
+            let config = ExperimentConfig {
+                experiment_id: ExperimentId::generate(),
+                world_seed: seed,
+                ticks,
+                cognition_interval,
+                backend: backend_kind,
+                maintenance_cost: maintenance,
+                start_energy: energy,
+            };
+            let id = config.experiment_id.to_string();
+            let dir = out.join(&id);
+            let log_path = dir.join("events.jsonl");
+            match run(&config, &log_path) {
+                Ok(summary) => {
+                    println!("experiment: {}", summary.experiment_id);
+                    println!("backend:    {}", summary.backend_id);
+                    println!("ticks:      {}", summary.ticks_executed);
+                    println!(
+                        "cognition events: {} (with action: {}, no action: {})",
+                        summary.cognition_events,
+                        summary.decisions_with_action,
+                        summary.decisions_no_action
+                    );
+                    println!("backend errors: {}", summary.backend_errors);
+                    println!("final energy:   {:.2}", summary.final_energy);
+                    println!("final counter:  {:.2}", summary.final_counter);
+                    println!("event log: {}", log_path.display());
+                }
+                Err(e) => {
+                    eprintln!("experiment failed: {e}");
+                    std::process::exit(1);
+                }
+            }
+        }
+        Commands::Inspect { path, tail } => {
+            let records = match ts_core::event_log::read_log(&path) {
+                Ok(r) => r,
+                Err(e) => {
+                    eprintln!("cannot read {}: {e}", path.display());
+                    std::process::exit(1);
+                }
+            };
+            println!("total records: {}", records.len());
+            let start = records.len().saturating_sub(tail);
+            for r in &records[start..] {
+                let line = match &r.payload {
+                    EventPayload::ExperimentStarted {
+                        experiment_id,
+                        seed,
+                        ..
+                    } => format!("seq={} START exp={experiment_id} seed={seed}", r.seq),
+                    EventPayload::SubjectCreated { subject_id, .. } => {
+                        format!("seq={} SUBJECT_CREATED {}", r.seq, subject_id)
+                    }
+                    EventPayload::DecisionMade {
+                        subject_id,
+                        tick,
+                        decision,
+                    } => format!(
+                        "seq={} DECISION t={tick} subj={subject_id} action={}",
+                        r.seq,
+                        decision
+                            .action
+                            .as_ref()
+                            .map(|a| a.name.as_str())
+                            .unwrap_or("<none>")
+                    ),
+                    EventPayload::WorldEvents { tick, events } => format!(
+                        "seq={} WORLD t={tick} {}",
+                        r.seq,
+                        events
+                            .iter()
+                            .map(|e| match e {
+                                ts_core::wabix::WorldEvent::ActionApplied { action, .. } =>
+                                    format!("{action}!"),
+                                ts_core::wabix::WorldEvent::ActionRejected { action, .. } =>
+                                    format!("{action}✗"),
+                                ts_core::wabix::WorldEvent::SubjectDied { cause, .. } =>
+                                    format!("DIED({cause})"),
+                            })
+                            .collect::<Vec<_>>()
+                            .join(",")
+                    ),
+                    EventPayload::SubjectState {
+                        subject_id,
+                        tick,
+                        energy,
+                        ..
+                    } => format!(
+                        "seq={} STATE t={tick} subj={subject_id} energy={energy:.2}",
+                        r.seq
+                    ),
+                    EventPayload::ResourceConsumed(e) => format!(
+                        "seq={} RESOURCE t={} {}={} by {}",
+                        r.seq,
+                        e.tick,
+                        e.kind.as_str(),
+                        e.amount,
+                        e.consumer
+                    ),
+                    EventPayload::Migration {
+                        dimension,
+                        from,
+                        to,
+                        tick,
+                        ..
+                    } => format!(
+                        "seq={} MIGRATION t={tick} {dimension}: {from} -> {to}",
+                        r.seq
+                    ),
+                    EventPayload::ExperimentFinished { reason } => {
+                        format!("seq={} FINISHED: {reason}", r.seq)
+                    }
+                };
+                println!("{line}");
+            }
+        }
+    }
 }

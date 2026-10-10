@@ -22,3 +22,14 @@ All notable changes to Transubstrate are documented here.
   validated actions.
 - CI: fmt, clippy, test, release build on GitHub Actions.
 - README, CONTRIBUTING, SECURITY, .gitignore.
+
+### Added (feat/vertical-slice, unmerged)
+- Cognition backends: EchoBackend (deterministic baseline), RandomBackend
+  (seeded), EnergyRuleBackend (positive control), MalformedBackend (safe
+  failure testing).
+- TestWorld: deterministic two-action world exercising the full WABIX loop.
+- Experiment harness: config → run → summary + event log, with maintenance
+  costs, death by energy exhaustion, cadence-based cognition.
+- CLI: `transubstrate run-test` (real experiment execution) and
+  `transubstrate inspect` (event log digest).
+- 26 unit tests passing.

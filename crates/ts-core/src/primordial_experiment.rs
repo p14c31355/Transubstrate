@@ -1,0 +1,423 @@
+//! Primordial experiment runner: N organisms, shared world, per-organism
+//! backends, cadence-gated cognition, full event logging and population
+//! metrics. This is M3's real experiment loop.
+
+use serde::{Deserialize, Serialize};
+use std::path::Path;
+
+use crate::cognition::{CognitionBackend, CognitionError, charge_cognition, validate_decision};
+use crate::event_log::{EventLog, EventPayload};
+use crate::ids::{ExperimentId, SubjectId};
+use crate::primordial::{PrimordialConfig, PrimordialWorld, WORLD_IMPLEMENTATION};
+use crate::runtime::CognitionCadence;
+use crate::wabix::{Action, SubjectRef, World};
+
+/// Per-organism configuration: which backend and its seed/params.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct OrganismSpec {
+    pub backend: BackendKind,
+    pub start_energy: f32,
+}
+
+/// Backend selector (mirrors experiment.rs but serialized into configs).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub enum BackendKind {
+    Echo,
+    Random { seed: u64 },
+    EnergyRule { absorb_threshold: f32 },
+    Malformed,
+}
+
+impl BackendKind {
+    pub fn instantiate(&self) -> Box<dyn CognitionBackend> {
+        match self {
+            BackendKind::Echo => Box::new(crate::backends::EchoBackend),
+            BackendKind::Random { seed } => Box::new(crate::backends::RandomBackend::new(*seed)),
+            BackendKind::EnergyRule { absorb_threshold } => {
+                Box::new(crate::backends::EnergyRuleBackend {
+                    absorb_threshold: *absorb_threshold,
+                })
+            }
+            BackendKind::Malformed => Box::new(crate::backends::MalformedBackend::default()),
+        }
+    }
+
+    pub fn backend_id(&self) -> &'static str {
+        match self {
+            BackendKind::Echo => "mock-echo-v0",
+            BackendKind::Random { .. } => "mock-random-v0",
+            BackendKind::EnergyRule { .. } => "rule-energy-v0",
+            BackendKind::Malformed => "mock-malformed-v0",
+        }
+    }
+}
+
+/// Full primordial experiment configuration.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PrimordialExperimentConfig {
+    pub experiment_id: ExperimentId,
+    pub world: PrimordialConfig,
+    pub world_seed: u64,
+    pub ticks: u64,
+    /// Cognition fires every N ticks for every living organism.
+    pub cognition_interval: u64,
+    /// Organism roster: spec applied to `population` organisms.
+    pub population: u32,
+    pub organism: OrganismSpec,
+}
+
+impl Default for PrimordialExperimentConfig {
+    fn default() -> Self {
+        Self {
+            experiment_id: ExperimentId::generate(),
+            world: PrimordialConfig::default(),
+            world_seed: 42,
+            ticks: 1000,
+            cognition_interval: 10,
+            population: 8,
+            organism: OrganismSpec {
+                backend: BackendKind::EnergyRule {
+                    absorb_threshold: 0.3,
+                },
+                start_energy: 10.0,
+            },
+        }
+    }
+}
+
+/// Population-level metrics over time (one sample per recorded tick).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PopulationSample {
+    pub tick: u64,
+    pub alive: u32,
+    pub total_energy: f32,
+    pub mean_energy: f32,
+    /// Total energy remaining in the field.
+    pub field_energy: f32,
+}
+
+/// Summary of a completed primordial experiment.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PrimordialRunSummary {
+    pub experiment_id: String,
+    pub ticks_executed: u64,
+    pub initial_population: u32,
+    pub survivors: u32,
+    pub deaths: u32,
+    pub cognition_events_total: u128,
+    pub absorb_events: u64,
+    pub signal_events: u64,
+    pub move_events: u64,
+    pub rejected_events: u64,
+    pub backend_errors: u64,
+    pub samples: Vec<PopulationSample>,
+    /// Mean lifetime of dead organisms (ticks); None if nobody died.
+    pub mean_lifetime_of_dead: Option<f64>,
+}
+
+/// Metrics aggregation over the event stream + final world state.
+struct Aggregates {
+    absorb_events: u64,
+    signal_events: u64,
+    move_events: u64,
+    rejected_events: u64,
+    backend_errors: u64,
+    death_ticks: Vec<(String, u64)>,
+}
+
+/// Run the primordial experiment.
+pub fn run_primordial(
+    config: &PrimordialExperimentConfig,
+    log_path: &Path,
+) -> Result<PrimordialRunSummary, CognitionError> {
+    let mut log = EventLog::new(8192)
+        .with_sink(log_path)
+        .map_err(|e| CognitionError::Unavailable(format!("log sink: {e}")))?;
+
+    log.push(EventPayload::ExperimentStarted {
+        experiment_id: config.experiment_id.to_string(),
+        world_implementation: WORLD_IMPLEMENTATION.into(),
+        seed: config.world_seed,
+    });
+
+    let mut world = PrimordialWorld::new(config.world.clone(), config.world_seed);
+
+    // Spawn population with stable subject IDs (also used as RNG-domain tags).
+    let mut subjects: Vec<(String, SubjectRef)> = Vec::new();
+    let mut backends: Vec<(String, Box<dyn CognitionBackend>)> = Vec::new();
+    let mut subject_ids: Vec<SubjectId> = Vec::new();
+    for i in 0..config.population {
+        let sid = SubjectId::from_static(&format!("org-{i:04}"));
+        let pos = world.spawn(&sid.to_string(), config.organism.start_energy);
+        let sref = SubjectRef {
+            subject_id: sid.to_string(),
+            pos,
+            energy: config.organism.start_energy,
+        };
+        log.push(EventPayload::SubjectCreated {
+            subject_id: sid.to_string(),
+            subject_ref: sref.clone(),
+        });
+        subjects.push((sid.to_string(), sref));
+        backends.push((sid.to_string(), config.organism.backend.instantiate()));
+        subject_ids.push(sid);
+    }
+
+    let cadence = CognitionCadence::every(config.cognition_interval);
+    let mut ledger = crate::resource::ResourceLedger::new(8192);
+    let mut aggregates = Aggregates {
+        absorb_events: 0,
+        signal_events: 0,
+        move_events: 0,
+        rejected_events: 0,
+        backend_errors: 0,
+        death_ticks: Vec::new(),
+    };
+    let mut samples: Vec<PopulationSample> = Vec::new();
+    let mut cognition_events_total: u128 = 0;
+
+    for tick in 0..config.ticks {
+        // Cognition phase (before world tick): every living organism decides.
+        let mut actions: Vec<(String, Action)> = Vec::new();
+        if cadence.fires_on(tick) {
+            for (i, (sid, sref)) in subjects.iter().enumerate() {
+                if world.organism(sid).is_none() {
+                    continue; // dead
+                }
+                let observations = match world.observe(sref) {
+                    Ok(o) => o,
+                    Err(_) => continue,
+                };
+                let ctx = crate::cognition::DecisionContext {
+                    subject_id: sid.clone(),
+                    tick,
+                    energy: sref.energy,
+                    observations,
+                    manifest: world.manifest().clone(),
+                    memory: vec![], // per-subject memory arrives with M5
+                };
+                let decision = match backends[i].1.decide(&ctx) {
+                    Ok(d) => d,
+                    Err(e) => {
+                        aggregates.backend_errors += 1;
+                        log.push(EventPayload::WorldEvents {
+                            tick,
+                            events: vec![crate::wabix::WorldEvent::ActionRejected {
+                                subject: sid.clone(),
+                                action: "COGNITION".into(),
+                                reason: format!("backend error: {e}"),
+                            }],
+                        });
+                        continue;
+                    }
+                };
+                if let Err(e) = validate_decision(world.manifest(), &decision) {
+                    // Schema violations fail safely: logged, no action.
+                    aggregates.backend_errors += 1;
+                    log.push(EventPayload::WorldEvents {
+                        tick,
+                        events: vec![crate::wabix::WorldEvent::ActionRejected {
+                            subject: sid.clone(),
+                            action: "COGNITION".into(),
+                            reason: format!("schema violation: {e}"),
+                        }],
+                    });
+                    continue;
+                }
+                charge_cognition(
+                    &mut ledger,
+                    tick,
+                    &crate::cognition::CognitionCost {
+                        cognition_events: 1,
+                        tokens: 0,
+                    },
+                    sid,
+                );
+                cognition_events_total += 1;
+                log.push(EventPayload::DecisionMade {
+                    subject_id: sid.clone(),
+                    tick,
+                    decision: decision.clone(),
+                });
+                if let Some(action) = decision.action {
+                    actions.push((sid.clone(), action));
+                }
+            }
+        }
+
+        // World tick with all actions.
+        let events = world.tick(&actions);
+        for e in &events {
+            match e {
+                crate::wabix::WorldEvent::ActionApplied { action, .. } => match action.as_str() {
+                    "ABSORB" => aggregates.absorb_events += 1,
+                    "SIGNAL" => aggregates.signal_events += 1,
+                    "MOVE" => aggregates.move_events += 1,
+                    _ => {}
+                },
+                crate::wabix::WorldEvent::ActionRejected { .. } => aggregates.rejected_events += 1,
+                crate::wabix::WorldEvent::SubjectDied { subject, .. } => {
+                    aggregates.death_ticks.push((subject.clone(), tick));
+                }
+            }
+        }
+        log.push(EventPayload::WorldEvents { tick, events });
+
+        // Sync SubjectRef energies from the world (the runner-side view).
+        for (sid, sref) in subjects.iter_mut() {
+            if let Some(org) = world.organism(sid) {
+                sref.energy = org.energy;
+                sref.pos = org.pos;
+            }
+        }
+
+        // Sample population metrics every 10 ticks and at the end.
+        if tick % 10 == 0 || tick == config.ticks - 1 {
+            let alive = world.alive_count();
+            let total_energy: f32 = world
+                .all_organisms()
+                .filter(|o| o.alive)
+                .map(|o| o.energy)
+                .sum();
+            let field_energy: f32 = world.total_field_energy();
+            samples.push(PopulationSample {
+                tick,
+                alive: alive as u32,
+                total_energy,
+                mean_energy: if alive > 0 {
+                    total_energy / alive as f32
+                } else {
+                    0.0
+                },
+                field_energy,
+            });
+            log.push(EventPayload::SubjectState {
+                subject_id: "POPULATION".into(),
+                tick,
+                pos: (alive as u32, 0),
+                energy: total_energy,
+            });
+        }
+
+        if world.alive_count() == 0 {
+            log.push(EventPayload::ExperimentFinished {
+                reason: "extinction".into(),
+            });
+            break;
+        }
+    }
+
+    let finished = world.alive_count() > 0;
+    if finished {
+        log.push(EventPayload::ExperimentFinished {
+            reason: "ticks elapsed".into(),
+        });
+    }
+
+    let survivors = world.alive_count() as u32;
+    let lifetimes: Vec<u64> = aggregates.death_ticks.iter().map(|(_, t)| *t).collect();
+    let mean_lifetime = if lifetimes.is_empty() {
+        None
+    } else {
+        Some(lifetimes.iter().map(|t| *t as f64).sum::<f64>() / lifetimes.len() as f64)
+    };
+
+    Ok(PrimordialRunSummary {
+        experiment_id: config.experiment_id.to_string(),
+        ticks_executed: world.tick,
+        initial_population: config.population,
+        survivors,
+        deaths: aggregates.death_ticks.len() as u32,
+        cognition_events_total,
+        absorb_events: aggregates.absorb_events,
+        signal_events: aggregates.signal_events,
+        move_events: aggregates.move_events,
+        rejected_events: aggregates.rejected_events,
+        backend_errors: aggregates.backend_errors,
+        samples,
+        mean_lifetime_of_dead: mean_lifetime,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn energy_rule_population_survives_and_absorbs() {
+        let dir = std::env::temp_dir().join(format!("ts-prim-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let cfg = PrimordialExperimentConfig {
+            ticks: 200,
+            cognition_interval: 5,
+            ..Default::default()
+        };
+        let summary = run_primordial(&cfg, &dir.join("events.jsonl")).unwrap();
+        assert!(
+            summary.absorb_events > 0,
+            "energy-rule organisms must absorb"
+        );
+        assert!(summary.samples.len() > 10);
+        assert_eq!(summary.initial_population, 8);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn extinction_happens_with_no_action() {
+        let dir = std::env::temp_dir().join(format!("ts-prim-ext-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let cfg = PrimordialExperimentConfig {
+            ticks: 500,
+            cognition_interval: 5,
+            organism: OrganismSpec {
+                backend: BackendKind::Echo, // always WAIT
+                start_energy: 5.0,
+            },
+            ..Default::default()
+        };
+        let summary = run_primordial(&cfg, &dir.join("events.jsonl")).unwrap();
+        assert_eq!(summary.survivors, 0, "WAIT-only organisms must starve");
+        assert_eq!(summary.deaths, 8);
+        assert!(summary.mean_lifetime_of_dead.is_some());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn same_seed_same_population_trajectory() {
+        let dir = std::env::temp_dir().join(format!("ts-prim-det-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let mk = || PrimordialExperimentConfig {
+            experiment_id: ExperimentId::generate(),
+            world_seed: 777,
+            ticks: 100,
+            ..Default::default()
+        };
+        let s1 = run_primordial(&mk(), &dir.join("a.jsonl")).unwrap();
+        let s2 = run_primordial(&mk(), &dir.join("b.jsonl")).unwrap();
+        assert_eq!(s1.samples.len(), s2.samples.len());
+        for (a, b) in s1.samples.iter().zip(&s2.samples) {
+            assert_eq!(a.alive, b.alive, "alive count must match per tick");
+            assert!((a.field_energy - b.field_energy).abs() < 1e-4);
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn random_backend_produces_all_event_kinds() {
+        let dir = std::env::temp_dir().join(format!("ts-prim-rnd-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let cfg = PrimordialExperimentConfig {
+            ticks: 300,
+            cognition_interval: 2,
+            organism: OrganismSpec {
+                backend: BackendKind::Random { seed: 314 },
+                start_energy: 20.0,
+            },
+            ..Default::default()
+        };
+        let summary = run_primordial(&cfg, &dir.join("events.jsonl")).unwrap();
+        assert!(summary.move_events > 0);
+        assert!(summary.absorb_events > 0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}

@@ -102,6 +102,8 @@ impl NetworkWorld {
         let manifest = crate::wabix::ManifestBuilder::new(NETWORK_WORLD_IMPLEMENTATION)
             .channel("node_energy", "scalar", (0.0, 1.0))
             .channel("nearby_signal_0", "scalar", (0.0, 1.0))
+            .channel("nearby_signal_left", "scalar", (0.0, 1.0))
+            .channel("nearby_signal_right", "scalar", (0.0, 1.0))
             .channel("degree", "scalar", (0.0, 10.0))
             .action("WAIT", 0, vec![])
             .action("ABSORB", 1, vec![(0.0, 1.0)])
@@ -388,6 +390,7 @@ impl World for NetworkWorld {
             WabixError::UnknownChannel(format!("dead subject {}", subject.subject_id))
         })?;
         let i = self.idx_usize(s.node);
+        let neighbors = self.ring_neighbors(s.node);
         Ok(vec![
             Observation::new(
                 "node_energy",
@@ -396,6 +399,19 @@ impl World for NetworkWorld {
             Observation::new(
                 "nearby_signal_0",
                 (self.signal_field[i] / NET_FIELD_NORMALIZATION).clamp(0.0, 1.0),
+            ),
+            // Ring-neighbor signal readings: the two HOP destinations. A
+            // subject that can compare left vs right can STEER toward a
+            // signal source instead of sweeping the ring blindly.
+            Observation::new(
+                "nearby_signal_left",
+                (self.signal_field[self.idx_usize(neighbors[0])] / NET_FIELD_NORMALIZATION)
+                    .clamp(0.0, 1.0),
+            ),
+            Observation::new(
+                "nearby_signal_right",
+                (self.signal_field[self.idx_usize(neighbors[1])] / NET_FIELD_NORMALIZATION)
+                    .clamp(0.0, 1.0),
             ),
             Observation::new("degree", 2.0),
         ])

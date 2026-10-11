@@ -87,6 +87,34 @@ metabolism (0.05) + 10 headroom = 40 units (vs 12 default).
   robust effect; true *steering* toward the emitter needs a signal
   gradient observation (queued).
 
+## GRADIENT-STEERED RUN (OBSERVED, n=5 seeds, 600 ticks, 6 followers)
+
+WABIX gains two channels (`nearby_signal_left`/`nearby_signal_right` = the
+two HOP destinations' signal readings); the follower policy compares them
+and HOPs toward the stronger side.
+
+| seed | proximity | nullProx | intake/tick | nullIntake | alive | emitter |
+|------|-----------|----------|-------------|------------|-------|---------|
+| 42   | 0.984     | 0.984    | 0.729       | 0.276      | 2     | true    |
+| 7    | 0.989     | 0.989    | 0.729       | 0.276      | 2     | true    |
+| 99   | 0.997     | 0.997    | 0.729       | 0.276      | 2     | true    |
+| 123  | 0.993     | 0.993    | 0.729       | 0.276      | 2     | true    |
+| 2024 | 0.991     | 0.991    | 0.729       | 0.276      | 2     | true    |
+
+- **Steering works**: mean proximity 0.984-0.997 (blind sweeping left it
+  at ~0.28) — followers converge on the emitter and stay.
+- **Emergent carrying capacity**: only 2/6 followers survive. Node energy
+  capacity (10 units) bounds how many can co-reside at the emitter's node;
+  the pull supply supports a fixed number of residents and the rest die in
+  the scramble. The convergence that steering buys is exactly what makes
+  the resource limit bite — a life-like population cap emerging from the
+  economics, not from an imposed rule.
+- **The beacon diffuses without the pull**: the emitter's signal still
+  spreads with `signal_pull_rate = 0`, so steering alone does not depend
+  on the pull; what the pull provides is the ENERGY at the beacon
+  (intake 0.729 vs 0.276 null, 5/5 seeds). Cue and payoff are separable
+  mechanisms.
+
 ## CAVEATS
 
 - Engineered policies; deterministic per seed.

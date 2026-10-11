@@ -68,14 +68,24 @@ the batch sweep runner all merged)
       (up from 2.1×); attraction narrows to a small margin (4/5) — harvest
       is the robust effect; signal-gradient steering queued
       (docs/experiments/signaling-followers.md).
-- [ ] Signal-gradient observation (nearby_signal_left/right) so followers
-      can steer toward the emitter; shared substrate with chemical-field
-      meaning formation. Then a multi-subject LLM signaling run.
+- [x] Signal-gradient observation: nearby_signal_left/right channels —
+      followers converge on the emitter (proximity 0.98-0.997 vs 0.28
+      sweeping); emergent carrying capacity: only 2/6 survive because node
+      capacity caps co-residency at the beacon; cue (signal diffusion) is
+      separable from payoff (pull energy, 5/5 seeds)
+      (docs/experiments/signaling-followers.md).
+- [ ] Multi-subject LLM signaling run: the rule-level economics now sustain
+      followers (survival budget + gradient steering + carrying capacity
+      observed).
 - [ ] Chemical-field meaning formation (the semantics-free substrate is
       still unused by controllers).
 - [ ] Carrying capacity: tune regen vs consumption so the field actually
       binds (currently regen dominates at 0.01/cell/tick); rerun
-      reproduction experiments under binding scarcity.
+      reproduction experiments under binding scarcity. NOTE: an emergent
+      node-level carrying capacity is ALREADY OBSERVED in the network world
+      (gradient-steered followers: 2/6 survive at the emitter —
+      docs/experiments/signaling-followers.md); the remaining work is the
+      primordial grid's field-level bind.
 
 ## 3. M9 continuation — world migration
 

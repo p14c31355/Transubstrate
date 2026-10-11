@@ -3,6 +3,7 @@
 
 pub mod backends;
 pub mod cognition;
+pub mod competition;
 pub mod continuity;
 pub mod event_log;
 pub mod experiment;

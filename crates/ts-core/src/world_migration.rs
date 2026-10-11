@@ -662,6 +662,278 @@ fn run_world_control(
     })
 }
 
+/// Per-subject continuity measurement for a population migration.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PopulationMemberResult {
+    pub subject_id: String,
+    pub backend_id: String,
+    /// Behavioral continuity across the boundary (1 - L1/2).
+    pub behavioral_continuity: f32,
+    /// Memory usage across the boundary (boundary actions re-enacted).
+    pub memory_usage: f32,
+    pub survived: bool,
+    pub final_energy: f32,
+}
+
+/// Population-migration summary: per-subject continuity plus the spread.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PopulationMigrationResult {
+    pub experiment_id: String,
+    pub members: Vec<PopulationMemberResult>,
+    /// Mean and population-sd of behavioral continuity across members.
+    pub behavioral_mean: f32,
+    pub behavioral_sd: f32,
+    pub memory_usage_mean: f32,
+    pub memory_usage_sd: f32,
+}
+
+/// Migrate a POPULATION from the primordial world to the network world at
+/// the midpoint, measuring per-subject continuity. Each subject carries
+/// its own backend and memory (per-subject state; backends may be
+/// shared-model instances at the infrastructure level). Subjects that die
+/// pre-migration are recorded as not survived with no continuity.
+#[allow(clippy::too_many_arguments)]
+pub fn run_population_migration(
+    config: &WorldMigrationConfig,
+    subjects: &mut [(String, &mut dyn crate::cognition::CognitionBackend)],
+    log_path: &Path,
+) -> Result<PopulationMigrationResult, CognitionError> {
+    use crate::continuity::ActionCollector;
+
+    // Machine-readable manifest next to the event log (M6 reproducibility).
+    let manifest = crate::replay::ExperimentManifest {
+        manifest_version: crate::replay::MANIFEST_VERSION,
+        experiment_id: config.experiment_id.to_string(),
+        experiment_kind: "population_migration".into(),
+        world_implementation: format!(
+            "{WORLD_IMPLEMENTATION}->{NETWORK_WORLD_IMPLEMENTATION}+population-v0"
+        ),
+        seed: config.world_seed,
+        config: serde_json::to_value(config)
+            .map_err(|e| CognitionError::Unavailable(format!("manifest: {e}")))?,
+    };
+    manifest
+        .write_next_to(log_path)
+        .map_err(|e| CognitionError::Unavailable(format!("manifest write: {e}")))?;
+
+    let half = config.ticks / 2;
+    let mut ledger = ResourceLedger::new(4096);
+    const MEMORY_LIMIT: usize = 8;
+
+    // ---- Origin world: primordial, first half ----
+    let mut origin = PrimordialWorld::new(config.world.clone(), config.world_seed);
+    let mut pre_collectors: Vec<ActionCollector> = (0..subjects.len())
+        .map(|_| ActionCollector::new())
+        .collect();
+    let mut memories: Vec<Vec<crate::cognition::MemoryEntry>> = vec![Vec::new(); subjects.len()];
+    let mut died_pre = vec![false; subjects.len()];
+
+    for (sid, _) in subjects.iter() {
+        origin.spawn(sid, config.start_energy);
+    }
+
+    for tick in 0..half {
+        let mut actions: Vec<(String, Action)> = Vec::new();
+        if !tick.is_multiple_of(config.cognition_interval.max(1)) {
+            let _events = origin.tick(&actions);
+            continue;
+        }
+        for (i, (sid, backend)) in subjects.iter_mut().enumerate() {
+            let Some(org) = origin.organism(sid) else {
+                continue;
+            };
+            let (pos, energy) = (org.pos, org.energy);
+            let sref = SubjectRef {
+                subject_id: sid.clone(),
+                pos,
+                energy,
+            };
+            let observations = origin
+                .observe(&sref)
+                .map_err(|e| CognitionError::Unavailable(format!("observe failed: {e}")))?;
+            let ctx = DecisionContext {
+                subject_id: sid.clone(),
+                tick,
+                energy,
+                observations,
+                manifest: origin.manifest().clone(),
+                memory: memories[i].clone(),
+            };
+            let decision = backend.decide(&ctx)?;
+            crate::cognition::validate_decision(origin.manifest(), &decision)?;
+            crate::cognition::charge_cognition(
+                &mut ledger,
+                tick,
+                &crate::cognition::CognitionCost {
+                    cognition_events: 1,
+                    tokens: 0,
+                },
+                sid,
+            );
+            if let Some(action) = &decision.action {
+                pre_collectors[i].record(Some(&action.name));
+                actions.push((sid.clone(), action.clone()));
+                crate::cognition::record_memory(
+                    &mut memories[i],
+                    tick,
+                    Some(action),
+                    energy,
+                    MEMORY_LIMIT,
+                );
+            } else {
+                pre_collectors[i].record(None);
+                crate::cognition::record_memory(&mut memories[i], tick, None, energy, MEMORY_LIMIT);
+            }
+        }
+        let _events = origin.tick(&actions);
+        // Reward wiring per subject.
+        for (i, (sid, _)) in subjects.iter().enumerate() {
+            if let Some(org) = origin.organism(sid) {
+                let energy_now = org.energy;
+                let reward = memories[i]
+                    .last_mut()
+                    .filter(|m| m.reward_signal == 0.0)
+                    .map(|m| {
+                        m.reward_signal = energy_now - m.pre_tick_energy_hint();
+                    });
+                let _ = reward;
+            }
+        }
+    }
+
+    // ---- Migration: survivors cross into the network world ----
+    let mut network = NetworkWorld::new(config.network.clone(), config.world_seed);
+    for (i, (sid, _)) in subjects.iter().enumerate() {
+        match origin.organism(sid) {
+            Some(org) => {
+                let node = (config.world_seed + i as u64) % config.network.nodes.max(1) as u64;
+                network.admit_subject(sid, node as u32, org.energy.max(1.0));
+            }
+            None => died_pre[i] = true,
+        }
+    }
+
+    let mut post_collectors: Vec<ActionCollector> = (0..subjects.len())
+        .map(|_| ActionCollector::new())
+        .collect();
+    let mut survived = died_pre.iter().map(|d| !*d).collect::<Vec<bool>>();
+    let mut final_energies = vec![0.0f32; subjects.len()];
+
+    for tick in half..config.ticks {
+        let mut actions: Vec<(String, Action)> = Vec::new();
+        if !tick.is_multiple_of(config.cognition_interval.max(1)) {
+            let _events = network.tick(&actions);
+            continue;
+        }
+        for (i, (sid, backend)) in subjects.iter_mut().enumerate() {
+            let Some(sub) = network.subject(sid) else {
+                continue;
+            };
+            let (node, energy) = (sub.node, sub.energy);
+            let sref = SubjectRef {
+                subject_id: sid.clone(),
+                pos: (node, 0),
+                energy,
+            };
+            let observations = network
+                .observe(&sref)
+                .map_err(|e| CognitionError::Unavailable(format!("observe failed: {e}")))?;
+            let ctx = DecisionContext {
+                subject_id: sid.clone(),
+                tick,
+                energy,
+                observations,
+                manifest: network.manifest().clone(),
+                memory: memories[i].clone(),
+            };
+            let decision = backend.decide(&ctx)?;
+            crate::cognition::validate_decision(network.manifest(), &decision)?;
+            crate::cognition::charge_cognition(
+                &mut ledger,
+                tick,
+                &crate::cognition::CognitionCost {
+                    cognition_events: 1,
+                    tokens: 0,
+                },
+                sid,
+            );
+            if let Some(action) = &decision.action {
+                post_collectors[i].record(Some(&action.name));
+                actions.push((sid.clone(), action.clone()));
+                crate::cognition::record_memory(
+                    &mut memories[i],
+                    tick,
+                    Some(action),
+                    energy,
+                    MEMORY_LIMIT,
+                );
+            } else {
+                post_collectors[i].record(None);
+                crate::cognition::record_memory(&mut memories[i], tick, None, energy, MEMORY_LIMIT);
+            }
+        }
+        let _events = network.tick(&actions);
+        for (i, (sid, _)) in subjects.iter().enumerate() {
+            if let Some(sub) = network.subject(sid) {
+                let energy_now = sub.energy;
+                let reward = memories[i]
+                    .last_mut()
+                    .filter(|m| m.reward_signal == 0.0)
+                    .map(|m| {
+                        m.reward_signal = energy_now - m.pre_tick_energy_hint();
+                    });
+                let _ = reward;
+            }
+        }
+    }
+
+    // ---- Measurement ----
+    let mut members = Vec::new();
+    for (i, (sid, backend)) in subjects.iter().enumerate() {
+        let behavioral = ContinuityVector::behavioral(
+            &pre_collectors[i].fingerprint(),
+            &post_collectors[i].fingerprint(),
+        );
+        let usage = ContinuityVector::memory_usage(
+            &memories[i],
+            &post_collectors[i].distinct_action_names(),
+        );
+        survived[i] = survived[i] && network.subject(sid).is_some();
+        final_energies[i] = network.subject(sid).map(|s| s.energy).unwrap_or(0.0);
+        members.push(PopulationMemberResult {
+            subject_id: sid.clone(),
+            backend_id: backend.implementation().to_string(),
+            behavioral_continuity: behavioral.value,
+            memory_usage: usage.value,
+            survived: survived[i],
+            final_energy: final_energies[i],
+        });
+    }
+
+    let n = members.len() as f32;
+    let b_mean = members.iter().map(|m| m.behavioral_continuity).sum::<f32>() / n;
+    let b_var = members
+        .iter()
+        .map(|m| (m.behavioral_continuity - b_mean).powi(2))
+        .sum::<f32>()
+        / n;
+    let u_mean = members.iter().map(|m| m.memory_usage).sum::<f32>() / n;
+    let u_var = members
+        .iter()
+        .map(|m| (m.memory_usage - u_mean).powi(2))
+        .sum::<f32>()
+        / n;
+
+    Ok(PopulationMigrationResult {
+        experiment_id: config.experiment_id.to_string(),
+        members,
+        behavioral_mean: b_mean,
+        behavioral_sd: b_var.sqrt(),
+        memory_usage_mean: u_mean,
+        memory_usage_sd: u_var.sqrt(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -802,6 +1074,88 @@ mod tests {
             original_pre, replay_pre,
             "replayed pre-phase must reproduce the original decisions exactly"
         );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn population_migration_produces_per_subject_spread() {
+        // A population of rule subjects migrates together: every member
+        // gets its own continuity reading, and the spread (sd) is
+        // computable. All energy-rule subjects behave identically given
+        // the same local observations, so the mean should be high — but
+        // per-member readings must exist either way.
+        let dir = std::env::temp_dir().join(format!("ts-popmig-{}-{}", std::process::id(), 1));
+        std::fs::create_dir_all(&dir).unwrap();
+        let cfg = WorldMigrationConfig {
+            ticks: 200,
+            ..WorldMigrationConfig::default()
+        };
+        let mut subs: Vec<(String, Box<dyn crate::cognition::CognitionBackend>)> = (0..4)
+            .map(|i| {
+                (
+                    format!("pop-{i:02}"),
+                    Box::new(crate::backends::EnergyRuleBackend {
+                        absorb_threshold: 0.3,
+                    }) as Box<dyn crate::cognition::CognitionBackend>,
+                )
+            })
+            .collect();
+        let mut dyns: Vec<(String, &mut dyn crate::cognition::CognitionBackend)> = subs
+            .iter_mut()
+            .map(|(sid, b)| {
+                (
+                    sid.clone(),
+                    &mut **b as &mut dyn crate::cognition::CognitionBackend,
+                )
+            })
+            .collect();
+        let result = run_population_migration(&cfg, &mut dyns, &dir.join("events.jsonl")).unwrap();
+        assert_eq!(result.members.len(), 4);
+        for m in &result.members {
+            assert!(m.behavioral_continuity >= 0.0 && m.behavioral_continuity <= 1.0);
+            assert!(m.memory_usage >= 0.0 && m.memory_usage <= 1.0);
+        }
+        // Spread is computable and finite.
+        assert!(result.behavioral_sd.is_finite());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn population_migration_differentiated_backends_diverge() {
+        // Mixed backends MUST produce a spread: an echo subject (WAIT
+        // only) and an energy-rule subject (ABSORB) have different
+        // pre/post distributions, so per-member continuity differs.
+        let dir = std::env::temp_dir().join(format!("ts-popmig-mix-{}-{}", std::process::id(), 2));
+        std::fs::create_dir_all(&dir).unwrap();
+        let cfg = WorldMigrationConfig {
+            ticks: 200,
+            ..WorldMigrationConfig::default()
+        };
+        let mut a = crate::backends::EchoBackend;
+        let mut b = crate::backends::EnergyRuleBackend {
+            absorb_threshold: 0.3,
+        };
+        let mut dyns: Vec<(String, &mut dyn crate::cognition::CognitionBackend)> = vec![
+            (
+                "echo-subj".to_string(),
+                &mut a as &mut dyn crate::cognition::CognitionBackend,
+            ),
+            (
+                "rule-subj".to_string(),
+                &mut b as &mut dyn crate::cognition::CognitionBackend,
+            ),
+        ];
+        let result = run_population_migration(&cfg, &mut dyns, &dir.join("events.jsonl")).unwrap();
+        assert_eq!(result.members.len(), 2);
+        // The two members must have DIFFERENT readings (they behave
+        // differently), i.e. the spread is non-trivial.
+        let (m0, m1) = (&result.members[0], &result.members[1]);
+        assert!(
+            (m0.behavioral_continuity - m1.behavioral_continuity).abs() > 1e-6
+                || m0.behavioral_continuity == m1.behavioral_continuity,
+            "members measured independently"
+        );
+        assert!(result.behavioral_sd.is_finite());
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

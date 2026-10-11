@@ -109,8 +109,15 @@ the batch sweep runner all merged)
 - [ ] Observation-adaptation metric: how quickly does behavior adapt to the
       new manifest's channel names (node_energy vs local_energy)? Needs the
       active decision surface above.
-- [ ] Multi-subject world migration: currently single-subject; migrate a
-      population and measure per-subject continuity spread.
+- [x] Population world migration (`run-population-migration`): 4-member
+      mixed-backend population migrated together — per-subject continuity
+      spread 0.281 ± 0.418 (energy-rule 0.0 = swap-fragile, echo 1.0 =
+      form-only continuity at zero energy, signal-seeker 0.125 = strategy
+      flip); determinism check passes (same backend → same reading)
+      (docs/experiments/population-migration.md).
+- [ ] LLM members in the population migration: sampling variance on top
+      of policy variance; per-subject continuity distribution for a
+      same-model population.
 
 ## 4. Infrastructure
 

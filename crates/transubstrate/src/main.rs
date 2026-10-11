@@ -189,6 +189,23 @@ enum Commands {
         #[arg(long)]
         summary: Option<PathBuf>,
     },
+    /// Migrate a POPULATION (one subject per backend in the comma list)
+    /// from the primordial world to the network world at the midpoint and
+    /// measure per-subject continuity spread.
+    RunPopulationMigration {
+        #[arg(long, default_value_t = 400)]
+        ticks: u64,
+        #[arg(long, default_value_t = 5)]
+        cognition_interval: u64,
+        /// Comma-separated backend list, one population member each:
+        /// echo | random | energy-rule | signal-seeker.
+        #[arg(long, value_delimiter = ',')]
+        backends: Vec<String>,
+        #[arg(long, default_value_t = 42)]
+        seed: u64,
+        #[arg(long, default_value_t = 20.0)]
+        energy: f32,
+    },
     /// Regenerate metrics from an event log without re-running cognition (M6).
     Replay {
         /// Path to the events.jsonl file.
@@ -988,6 +1005,87 @@ fn main() {
                 }
                 let _ = std::fs::write(path, format!("{pretty}\n"));
                 println!("summary written: {}", path.display());
+            }
+        }
+        Commands::RunPopulationMigration {
+            ticks,
+            cognition_interval,
+            backends,
+            seed,
+            energy,
+        } => {
+            if backends.is_empty() {
+                eprintln!("--backends must list at least one backend");
+                std::process::exit(2);
+            }
+            let mut kinds: Vec<ts_core::primordial_experiment::BackendKind> = Vec::new();
+            for (i, spec) in backends.iter().enumerate() {
+                let kind = match parse_any_backend(spec, seed + i as u64) {
+                    Ok(b) => b,
+                    Err(e) => {
+                        eprintln!("{e}");
+                        std::process::exit(2);
+                    }
+                };
+                kinds.push(kind);
+            }
+            let mut insts: Vec<Box<dyn ts_core::cognition::CognitionBackend>> =
+                kinds.iter().map(|k| k.instantiate()).collect();
+            let cfg = ts_core::world_migration::WorldMigrationConfig {
+                experiment_id: ExperimentId::generate(),
+                world: Default::default(),
+                world_seed: seed,
+                ticks,
+                cognition_interval,
+                start_energy: energy,
+                backend: kinds[0].clone(),
+                network: Default::default(),
+                memory_carry: true,
+            };
+            let mut dyns: Vec<(String, &mut dyn ts_core::cognition::CognitionBackend)> = insts
+                .iter_mut()
+                .enumerate()
+                .map(|(i, b)| {
+                    let leaked: &'static str = Box::leak(format!("pop-{i:02}").into_boxed_str());
+                    (
+                        leaked.to_string(),
+                        &mut **b as &mut dyn ts_core::cognition::CognitionBackend,
+                    )
+                })
+                .collect();
+            let dir = std::path::Path::new("runs").join(cfg.experiment_id.to_string());
+            let _ = std::fs::create_dir_all(&dir);
+            let log_path = dir.join("events.jsonl");
+            match ts_core::world_migration::run_population_migration(&cfg, &mut dyns, &log_path) {
+                Ok(result) => {
+                    println!("experiment: {}", result.experiment_id);
+                    println!(
+                        "population: {} members, behavioral continuity {:.3} ± {:.3}, \
+                         memory usage {:.3} ± {:.3}",
+                        result.members.len(),
+                        result.behavioral_mean,
+                        result.behavioral_sd,
+                        result.memory_usage_mean,
+                        result.memory_usage_sd
+                    );
+                    for m in &result.members {
+                        println!(
+                            "  {}: backend={} continuity={:.4} usage={:.4} survived={} \
+                             final_energy={:.2}",
+                            m.subject_id,
+                            m.backend_id,
+                            m.behavioral_continuity,
+                            m.memory_usage,
+                            m.survived,
+                            m.final_energy
+                        );
+                    }
+                    println!("manifest: {}", log_path.display());
+                }
+                Err(e) => {
+                    eprintln!("experiment failed: {e}");
+                    std::process::exit(1);
+                }
             }
         }
         Commands::Replay { path } => match ts_core::replay::regenerate_metrics(&path) {

@@ -121,6 +121,13 @@ enum Commands {
         /// to reach the emitter (default energy kills them mid-sweep).
         #[arg(long, default_value_t = false)]
         survival: bool,
+        /// Replace ALL rule followers with ONE cognitive follower
+        /// (backend: llm:<model>[:<effort>] | echo | energy-rule | ...).
+        #[arg(long)]
+        backend: Option<String>,
+        /// LLM sampling temperature (llm: backends only; 0 = deterministic).
+        #[arg(long, default_value_t = 0.0)]
+        llm_temperature: f32,
     },
     /// Run the reference-8gb benchmark harness (M10).
     Benchmark {
@@ -643,11 +650,64 @@ fn main() {
             followers,
             seeds,
             survival,
+            backend,
+            llm_temperature,
         } => {
             let seed_list: Vec<u64> = seeds
                 .split(',')
                 .filter_map(|s| s.trim().parse().ok())
                 .collect();
+            if let Some(backend_spec) = &backend {
+                // ---- Cognitive-follower mode: ONE LLM follower ----
+                for seed in &seed_list {
+                    let kind = match parse_any_backend(backend_spec, *seed) {
+                        Ok(b) => apply_llm_temperature(b, llm_temperature),
+                        Err(e) => {
+                            eprintln!("{e}");
+                            std::process::exit(2);
+                        }
+                    };
+                    let mut bk = kind.instantiate();
+                    let cfg = if survival {
+                        ts_core::signaling::SignalingConfig::survival_tuned(*seed, ticks, followers)
+                    } else {
+                        ts_core::signaling::SignalingConfig {
+                            world_seed: *seed,
+                            ticks,
+                            followers,
+                            ..Default::default()
+                        }
+                    };
+                    match ts_core::signaling::run_llm_signaling(&cfg, bk.as_mut()) {
+                        Ok(r) => {
+                            let acts: Vec<String> = r
+                                .action_counts
+                                .iter()
+                                .map(|(k, v)| format!("{k}:{v}"))
+                                .collect();
+                            let strengths: Vec<String> = r
+                                .signal_strengths
+                                .iter()
+                                .map(|(k, v)| format!("s{k}:{v}"))
+                                .collect();
+                            println!(
+                                "seed {seed}: backend={} decisions={} alive={} \
+                                 final_energy={:.2} proximity={:.3} actions=[{}] \
+                                 signal_strengths=[{}]",
+                                r.backend_id,
+                                r.decisions,
+                                r.alive,
+                                r.final_energy,
+                                r.mean_proximity,
+                                acts.join(", "),
+                                strengths.join(", ")
+                            );
+                        }
+                        Err(e) => println!("seed {seed}: FAILED ({e})"),
+                    }
+                }
+                return;
+            }
             println!(
                 "{:>6} {:>10} {:>10} {:>12} {:>12} {:>9} {:>9}",
                 "seed", "proximity", "nullProx", "intake/tick", "nullIntake", "alive", "emitter"

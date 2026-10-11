@@ -269,6 +269,143 @@ pub fn run_contrast(config: &SignalingConfig) -> (f32, f32, f32, f32) {
     )
 }
 
+/// One LLM subject's behavioral summary in the signaling world.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct LlmSignalingResult {
+    pub config: SignalingConfig,
+    pub backend_id: String,
+    /// Decisions the LLM actually made (cognition events).
+    pub decisions: u64,
+    /// Action name -> count across the run (WABIX-validated actions only).
+    pub action_counts: std::collections::BTreeMap<String, u64>,
+    /// SIGNAL strength histogram (rounded to 1 decimal): detects null-
+    /// signals (strength 0) vs real broadcasts.
+    pub signal_strengths: std::collections::BTreeMap<String, u64>,
+    /// Mean fraction of ticks the LLM subject spent on/adjacent to the
+    /// emitter's node.
+    pub mean_proximity: f32,
+    /// LLM subject alive at the end.
+    pub alive: bool,
+    /// Final energy.
+    pub final_energy: f32,
+}
+
+/// Run the signaling world with a RULE emitter (unchanged) and ONE
+/// cognitive follower driven by an arbitrary [`CognitionBackend`] — the
+/// multi-subject LLM signaling run. The follower observes the same
+/// gradient channels as the rule followers (nearby_signal_left/right) and
+/// its decisions are WABIX-validated with fail-safe semantics.
+pub fn run_llm_signaling(
+    config: &SignalingConfig,
+    backend: &mut dyn crate::cognition::CognitionBackend,
+) -> Result<LlmSignalingResult, crate::cognition::CognitionError> {
+    use crate::cognition::{DecisionContext, record_memory};
+    use crate::wabix::World;
+
+    let net = NetworkConfig {
+        signal_pull_rate: config.signal_pull_rate,
+        ..Default::default()
+    };
+    let mut world = NetworkWorld::new(net, config.world_seed);
+    let emitter_node = world.spawn("emitter", config.start_energy * 4.0);
+    let sid = "llm-follower";
+    world.spawn(sid, config.start_energy * 3.0);
+
+    const MEMORY_LIMIT: usize = 8;
+    let mut memory: Vec<crate::cognition::MemoryEntry> = Vec::new();
+    let mut action_counts: std::collections::BTreeMap<String, u64> =
+        std::collections::BTreeMap::new();
+    let mut signal_strengths: std::collections::BTreeMap<String, u64> =
+        std::collections::BTreeMap::new();
+    let mut decisions = 0u64;
+    let mut proximity_sum = 0.0f32;
+    let mut proximity_samples = 0.0f32;
+
+    for tick in 0..config.ticks {
+        let mut actions: Vec<(String, Action)> = Vec::new();
+        if tick.is_multiple_of(config.emitter_interval) {
+            actions.push((
+                "emitter".to_string(),
+                Action {
+                    name: "SIGNAL".into(),
+                    params: vec![config.emitter_strength],
+                },
+            ));
+        }
+        if let Some(subject) = world.subject(sid) {
+            let node = subject.node;
+            let d = {
+                let n = world.config.nodes as i64;
+                let d = (node as i64 - emitter_node as i64).rem_euclid(n);
+                d.min(n - d)
+            };
+            if d <= 1 {
+                proximity_sum += 1.0;
+            }
+            proximity_samples += 1.0;
+
+            let energy = subject.energy;
+            let sref = crate::wabix::SubjectRef {
+                subject_id: sid.to_string(),
+                pos: (node, 0),
+                energy,
+            };
+            let observations = world.observe(&sref).map_err(|e| {
+                crate::cognition::CognitionError::Unavailable(format!("observe: {e}"))
+            })?;
+            let ctx = DecisionContext {
+                subject_id: sid.to_string(),
+                tick,
+                energy,
+                observations,
+                manifest: world.manifest().clone(),
+                memory: memory.clone(),
+            };
+            let decision = backend.decide(&ctx)?;
+            crate::cognition::validate_decision(world.manifest(), &decision)?;
+            decisions += 1;
+            if let Some(action) = &decision.action {
+                *action_counts.entry(action.name.clone()).or_insert(0) += 1;
+                if action.name == "SIGNAL" {
+                    let s = format!("{:.1}", action.params.first().copied().unwrap_or(0.0));
+                    *signal_strengths.entry(s).or_insert(0) += 1;
+                }
+                actions.push((sid.to_string(), action.clone()));
+                record_memory(&mut memory, tick, Some(action), energy, MEMORY_LIMIT);
+            } else {
+                record_memory(&mut memory, tick, None, energy, MEMORY_LIMIT);
+            }
+        }
+        let _events = world.tick(&actions);
+        // Reward wiring for the last memory entry (energy delta).
+        if let Some(sub) = world.subject(sid) {
+            let energy_now = sub.energy;
+            let reward = memory
+                .last_mut()
+                .filter(|m| m.reward_signal == 0.0)
+                .map(|m| {
+                    m.reward_signal = energy_now - m.pre_tick_energy_hint();
+                });
+            let _ = reward;
+        }
+    }
+
+    Ok(LlmSignalingResult {
+        config: config.clone(),
+        backend_id: backend.implementation().to_string(),
+        decisions,
+        action_counts,
+        signal_strengths,
+        mean_proximity: if proximity_samples > 0.0 {
+            proximity_sum / proximity_samples
+        } else {
+            0.0
+        },
+        alive: world.subject(sid).is_some(),
+        final_energy: world.subject(sid).map(|s| s.energy).unwrap_or(0.0),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -388,5 +525,44 @@ mod tests {
                 null.mean_intake_per_tick
             );
         }
+    }
+
+    #[test]
+    fn llm_signaling_harness_deterministic_with_mock_backend() {
+        // The multi-subject harness must run with a mock backend too
+        // (CI-safe): echo (WAIT) decisions survive the run and log zeros.
+        let cfg = SignalingConfig::survival_tuned(42, 60, 2);
+        let mut bk = crate::backends::EchoBackend;
+        let r = run_llm_signaling(&cfg, &mut bk).unwrap();
+        assert!(r.alive, "echo follower must survive a short run");
+        assert_eq!(r.decisions, 60);
+        assert_eq!(
+            r.action_counts.get("WAIT"),
+            Some(&60),
+            "echo must only WAIT"
+        );
+    }
+
+    #[test]
+    fn llm_signaling_signal_seeker_acts_in_network_world() {
+        // The signal-seeker rule reads the network channels and acts; it
+        // must produce non-WAIT decisions here (positive control for the
+        // cognitive-follower harness).
+        let cfg = SignalingConfig::survival_tuned(42, 120, 2);
+        let mut bk = crate::backends::SignalSeekerBackend {
+            signal_threshold: 0.05,
+        };
+        let r = run_llm_signaling(&cfg, &mut bk).unwrap();
+        let non_wait: u64 = r
+            .action_counts
+            .iter()
+            .filter(|(k, _)| *k != "WAIT")
+            .map(|(_, v)| v)
+            .sum();
+        assert!(
+            non_wait > 0,
+            "signal-seeker must act in the network world: {:#?}",
+            r.action_counts
+        );
     }
 }

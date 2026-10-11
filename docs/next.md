@@ -74,9 +74,15 @@ the batch sweep runner all merged)
       capacity caps co-residency at the beacon; cue (signal diffusion) is
       separable from payoff (pull energy, 5/5 seeds)
       (docs/experiments/signaling-followers.md).
-- [ ] Multi-subject LLM signaling run: the rule-level economics now sustain
-      followers (survival budget + gradient steering + carrying capacity
-      observed).
+- [x] Multi-subject LLM signaling run (`run-signaling --backend`): granite
+      n=3 — 3/3 survive; null-signal (strength 0) is the LLM's cheap safe
+      action in 2/3 seeds; seed 99 sent real signals (0.2 ×122) AND
+      converged on the emitter (proximity 1.0) — the world now has
+      subjects that can both listen and broadcast
+      (docs/experiments/llm-signaling.md).
+- [ ] Convention formation across cognitive subjects: multiple LLM
+      followers in one signaling world; do listeners start responding to a
+      specific emitter's signal (detection metric from PR#50)?
 - [ ] Chemical-field meaning formation (the semantics-free substrate is
       still unused by controllers).
 - [ ] Carrying capacity: tune regen vs consumption so the field actually

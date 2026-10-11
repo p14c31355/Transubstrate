@@ -9,6 +9,7 @@ use crate::cognition::{CognitionBackend, CognitionError, charge_cognition, valid
 use crate::event_log::{EventLog, EventPayload};
 use crate::ids::{ExperimentId, SubjectId};
 use crate::primordial::{PrimordialConfig, PrimordialWorld, WORLD_IMPLEMENTATION};
+use crate::replay::{ExperimentManifest, MANIFEST_VERSION};
 use crate::runtime::CognitionCadence;
 use crate::wabix::{Action, SubjectRef, World};
 
@@ -166,6 +167,19 @@ pub fn run_primordial(
     let mut log = EventLog::new(8192)
         .with_sink(log_path)
         .map_err(|e| CognitionError::Unavailable(format!("log sink: {e}")))?;
+
+    let manifest = ExperimentManifest {
+        manifest_version: MANIFEST_VERSION,
+        experiment_id: config.experiment_id.to_string(),
+        experiment_kind: "primordial".into(),
+        world_implementation: WORLD_IMPLEMENTATION.into(),
+        seed: config.world_seed,
+        config: serde_json::to_value(config)
+            .map_err(|e| CognitionError::Unavailable(format!("manifest: {e}")))?,
+    };
+    manifest
+        .write_next_to(log_path)
+        .map_err(|e| CognitionError::Unavailable(format!("manifest write: {e}")))?;
 
     log.push(EventPayload::ExperimentStarted {
         experiment_id: config.experiment_id.to_string(),

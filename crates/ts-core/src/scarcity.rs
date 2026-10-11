@@ -22,10 +22,16 @@
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
+use crate::continuity::fnv1a64;
+use crate::event_log::{EventLog, EventPayload};
 use crate::lineage::Genome;
 use crate::primordial::{PrimordialConfig, PrimordialWorld};
+use crate::replay::{ExperimentManifest, MANIFEST_VERSION};
 use crate::rng::Rng;
 use crate::wabix::Action;
+
+// Resource ledger is charged by the caller (CLI/experiments); run_scarcity
+// itself does not need a ledger instance.
 
 /// Configuration for a scarcity-selection experiment.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -135,7 +141,47 @@ fn absorb_action() -> Action {
 /// NOTE: the world's absorb path must consult each organism's genome
 /// absorb_affinity for selection to be possible; this requires the genome
 /// modifier to be applied in PrimordialWorld::apply_action (see PR notes).
-pub fn run_scarcity(config: &ScarcityConfig, _log_path: Option<&Path>) -> ScarcityResult {
+pub fn run_scarcity(config: &ScarcityConfig, log_path: Option<&Path>) -> ScarcityResult {
+    let mut log = match log_path {
+        Some(p) => EventLog::new(8192)
+            .with_sink(p)
+            .map_err(|e| crate::cognition::CognitionError::Unavailable(format!("log sink: {e}")))
+            .unwrap_or_else(|_| EventLog::new(8192)),
+        None => EventLog::new(8192),
+    };
+
+    let manifest = ExperimentManifest {
+        manifest_version: MANIFEST_VERSION,
+        experiment_id: format!(
+            "scarcity-{}",
+            fnv1a64(
+                format!(
+                    "{}|{}|{}",
+                    config.world_seed, config.ticks, config.regen_rate
+                )
+                .as_bytes(),
+            )
+        ),
+        experiment_kind: "scarcity".into(),
+        world_implementation: crate::primordial::WORLD_IMPLEMENTATION.into(),
+        seed: config.world_seed,
+        config: serde_json::to_value(config).unwrap_or(serde_json::Value::Null),
+    };
+    if let Some(p) = log_path {
+        manifest
+            .write_next_to(p)
+            .map_err(|e| {
+                crate::cognition::CognitionError::Unavailable(format!("manifest write: {e}"))
+            })
+            .ok();
+    }
+
+    log.push(EventPayload::ExperimentStarted {
+        experiment_id: manifest.experiment_id.clone(),
+        world_implementation: manifest.world_implementation.clone(),
+        seed: config.world_seed,
+    });
+
     let mut world = PrimordialWorld::new(
         PrimordialConfig {
             regen_rate: config.regen_rate,

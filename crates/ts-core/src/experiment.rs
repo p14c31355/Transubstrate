@@ -10,6 +10,7 @@ use crate::backends::{EchoBackend, EnergyRuleBackend, MalformedBackend, RandomBa
 use crate::cognition::{CognitionBackend, CognitionError};
 use crate::event_log::{EventLog, EventPayload};
 use crate::ids::{ExperimentId, SubjectId};
+use crate::replay::{ExperimentManifest, MANIFEST_VERSION};
 use crate::resource::{ResourceEntry, ResourceKind};
 use crate::runtime::{CognitionCadence, RuntimeError, Subject, SubjectRunner};
 use crate::test_world::TestWorld;
@@ -77,9 +78,24 @@ pub struct RunSummary {
 }
 
 /// Run the vertical-slice experiment end to end, writing an event log.
+/// Also writes manifest.json next to the log for reproducibility.
 pub fn run(config: &ExperimentConfig, log_path: &Path) -> Result<RunSummary, RuntimeError> {
     let mut log = EventLog::new(4096).with_sink(log_path).map_err(|e| {
         RuntimeError::Cognition(CognitionError::Unavailable(format!("log sink: {e}")))
+    })?;
+
+    let manifest = ExperimentManifest {
+        manifest_version: MANIFEST_VERSION,
+        experiment_id: config.experiment_id.to_string(),
+        experiment_kind: "test".into(),
+        world_implementation: "test-world-v0".into(),
+        seed: config.world_seed,
+        config: serde_json::to_value(config).map_err(|e| {
+            RuntimeError::Cognition(CognitionError::Unavailable(format!("manifest: {e}")))
+        })?,
+    };
+    manifest.write_next_to(log_path).map_err(|e| {
+        RuntimeError::Cognition(CognitionError::Unavailable(format!("manifest write: {e}")))
     })?;
 
     log.push(EventPayload::ExperimentStarted {

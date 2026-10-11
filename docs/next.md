@@ -19,10 +19,14 @@ exploration recorded)
       batch-collected temp 0.3/0.7 at n=5 each. Temp 0.3 dominates: 3/5
       SIGNAL learning with 0 deaths (vs 2/5 with 2 deaths at 0.7);
       behavioral 0.65 ± 0.314 (bimodal) — PR#40,
-      docs/experiments/temperature-sweep.md. Temp 1.0 cell queued.
-- [ ] Boundary-anchored memory sampling: memory_retention 0.0 is currently a
-      FIFO roll-off artifact (40 decisions/phase vs limit 8); sample the
-      buffer AT the boundary to make the dimension discriminating.
+      docs/experiments/temperature-sweep.md. Temp 1.0 cell collected
+      (PR#43): 2/4 valid seeds learned SIGNAL, 1 schema-rejection
+      (`ABSORBT` typo) — WABIX fail-safe OBSERVED end-to-end.
+- [x] Boundary-anchored memory sampling: `memory_usage` dimension (PR#42) —
+      of the actions remembered AT the boundary, what fraction was
+      re-enacted post-swap. Calibrated: rule→LLM 1.0 (boundary memory
+      re-enacted), rule→echo 0.0 (echo picks WAIT, memory unused). Not
+      masked by FIFO roll-off.
 - [ ] Cross-model outcome learning: does qwen3.5 (thinking-style, reasoning
       off) also learn SIGNAL from outcomes at temp>0?
 

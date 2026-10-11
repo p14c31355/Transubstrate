@@ -103,12 +103,12 @@ Last updated: 2026-10-11 (PR#40 merged — temperature sweep: temp 0.3 dominates
   SIGNAL from past ticks"); seed 2026 adapted post-swap (ABSORB 38 →
   SIGNAL 23). First OBSERVED experience-driven action learning without
   human-assigned channel meaning. High variance: 2/5 deaths.
-- Temperature sweep (PR#40, n=5 per temp, batch via sweep-world-migration):
-  temp 0.3 dominates 0.7 — 3/5 seeds learned SIGNAL post-swap with ZERO
-  deaths (vs 2/5 learning, 2 deaths at 0.7); behavioral 0.65 ± 0.314
-  (bimodal: variance is the adoption signature, not noise). Post-swap
-  ABSORB → SIGNAL adaptation at 3/5 seeds is the strongest adaptation
-  evidence so far.
+- Temperature sweep (PR#40/#43, batch via sweep-world-migration):
+  temp 0.3 dominates — 3/5 seeds learned SIGNAL post-swap with ZERO deaths
+  (0.7: 2/5 with 2 deaths; 1.0: 2/4 valid with 1 schema-rejection
+  `ABSORBT` — the fail-safe path OBSERVED in an LLM migration).
+  Behavioral 0.65 ± 0.314 at 0.3 (bimodal: variance is the adoption
+  signature). Post-swap ABSORB → SIGNAL adaptation at 3/5 seeds.
 - Cross-model (PR#35): qwen3.5:2b-q4_K_M behavioral 0.00 vs granite 0.75
   under the identical harness — post-migration behavior is model-dependent.
 - LLM integration (M7): granite4.1:3b-q4_K_M produced valid typed decisions

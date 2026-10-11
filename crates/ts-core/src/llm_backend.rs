@@ -42,6 +42,13 @@ pub struct LlmBackendConfig {
     /// servers don't need one; this exists for optional remote endpoints.
     #[serde(default)]
     pub api_key: String,
+    /// Optional reasoning-effort hint sent as `reasoning_effort` in the
+    /// request body. Thinking-style models (e.g. qwen3.5) burn the
+    /// completion budget on hidden reasoning and return empty JSON unless
+    /// this is "none"; endpoints that ignore the field are unaffected.
+    /// None = field is not sent at all.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning_effort: Option<String>,
 }
 
 impl Default for LlmBackendConfig {
@@ -53,6 +60,7 @@ impl Default for LlmBackendConfig {
             max_tokens: 200,
             timeout_secs: 120,
             api_key: String::new(),
+            reasoning_effort: None,
         }
     }
 }
@@ -136,12 +144,15 @@ impl LlmBackend {
             "{}/chat/completions",
             self.config.base_url.trim_end_matches('/')
         );
-        let body = serde_json::json!({
+        let mut body = serde_json::json!({
             "model": self.config.model,
             "messages": [{"role": "user", "content": prompt}],
             "temperature": self.config.temperature,
             "max_tokens": self.config.max_tokens,
         });
+        if let Some(effort) = &self.config.reasoning_effort {
+            body["reasoning_effort"] = serde_json::Value::String(effort.clone());
+        }
 
         let client = ureq::AgentBuilder::new()
             .timeout(Duration::from_secs(self.config.timeout_secs))

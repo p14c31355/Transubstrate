@@ -204,9 +204,10 @@ pub fn run_primordial(
 
     let mut world = PrimordialWorld::new(config.world.clone(), config.world_seed);
     if let Some(threshold) = config.division_threshold {
-        let mut genome = crate::lineage::Genome::default();
-        genome.division_threshold = threshold;
-        world.set_founder_genome(genome);
+        world.set_founder_genome(crate::lineage::Genome {
+            division_threshold: threshold,
+            ..Default::default()
+        });
     }
 
     // Spawn population with stable subject IDs (also used as RNG-domain tags).

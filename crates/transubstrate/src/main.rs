@@ -82,6 +82,20 @@ enum Commands {
         #[arg(long, default_value = "runs")]
         out: PathBuf,
     },
+    /// Run the scarcity/selection experiment (research).
+    RunScarcity {
+        #[arg(long, default_value_t = 2000)]
+        ticks: u64,
+        #[arg(long, default_value_t = 12)]
+        founders: u32,
+        #[arg(long, default_value_t = 0.001)]
+        regen: f32,
+        /// Comma-separated seeds for multi-seed statistics.
+        #[arg(long, default_value = "42,7,99,123,2024")]
+        seeds: String,
+        #[arg(long, default_value = "runs")]
+        out: PathBuf,
+    },
     /// Regenerate metrics from an event log without re-running cognition (M6).
     Replay {
         /// Path to the events.jsonl file.
@@ -361,6 +375,83 @@ fn main() {
                     std::process::exit(1);
                 }
             }
+        }
+        Commands::RunScarcity {
+            ticks,
+            founders,
+            regen,
+            seeds,
+            out,
+        } => {
+            let seed_list: Vec<u64> = seeds
+                .split(',')
+                .filter_map(|s| s.trim().parse().ok())
+                .collect();
+            if seed_list.is_empty() {
+                eprintln!("no valid seeds in '{seeds}'");
+                std::process::exit(2);
+            }
+            let mut results = Vec::new();
+            for seed in &seed_list {
+                let cfg = ts_core::scarcity::ScarcityConfig {
+                    world_seed: *seed,
+                    ticks,
+                    founders,
+                    regen_rate: regen,
+                    ..Default::default()
+                };
+                results.push((*seed, ts_core::scarcity::run_scarcity(&cfg, None)));
+            }
+            println!(
+                "{:>6} {:>6} {:>6} {:>6} {:>6} {:>8} {:>8} {:>10}",
+                "seed", "alive", "births", "deaths", "maxgen", "affinity", "founder", "lineages"
+            );
+            let mut affinity_deltas = Vec::new();
+            for (seed, r) in &results {
+                let aff = r.final_mean_affinity.unwrap_or(0.0);
+                affinity_deltas.push(aff - r.founder_affinity);
+                println!(
+                    "{:>6} {:>6} {:>6} {:>6} {:>6} {:>8.4} {:>8.2} {:>10}",
+                    seed,
+                    r.final_alive,
+                    r.total_births,
+                    r.total_deaths,
+                    r.max_generation,
+                    aff,
+                    r.founder_affinity,
+                    r.final_lineages
+                );
+            }
+            // Multi-seed summary of the selection signal. Extinction (all
+            // deltas -1.0) is recorded as extinction, not as a selection
+            // signal — dead populations have no traits to compare.
+            let n = affinity_deltas.len() as f32;
+            let mean: f32 = affinity_deltas.iter().sum::<f32>() / n;
+            let var: f32 = affinity_deltas
+                .iter()
+                .map(|d| (d - mean) * (d - mean))
+                .sum::<f32>()
+                / n;
+            let extinct = results.iter().all(|(_, r)| r.final_alive == 0);
+            if extinct {
+                println!("OUTCOME: extinction in all seeds — no trait comparison possible");
+            } else {
+                println!(
+                    "mean affinity delta: {mean:+.4} (sd {:+.4}) over {} seeds",
+                    var.sqrt(),
+                    seed_list.len()
+                );
+                if mean > 0.02 {
+                    println!(
+                        "SELECTION SIGNAL: mean affinity increased (drift direction positive)"
+                    );
+                } else if mean < -0.02 {
+                    println!("SELECTION SIGNAL: mean affinity decreased");
+                } else {
+                    println!("NO CLEAR SELECTION SIGNAL within |0.02| band");
+                }
+            }
+            let _ = out;
         }
         Commands::Replay { path } => match ts_core::replay::regenerate_metrics(&path) {
             Ok(m) => {

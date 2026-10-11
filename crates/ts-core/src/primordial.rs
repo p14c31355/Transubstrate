@@ -272,13 +272,15 @@ impl PrimordialWorld {
             "ABSORB" => {
                 // params[0] in 0..1 = fraction of attempt strength; converts
                 // up to param * MAX_ABSORB from the cell into organism energy
-                // times absorb_efficiency.
+                // times absorb_efficiency × genome absorb_affinity. The
+                // genome modifier makes absorption a selectable trait.
                 let want = action.params[0] * MAX_ABSORB;
                 let (x, y) = self.organisms[org_idx].pos;
                 let i = self.idx(x, y);
                 let available = self.energy_field[i].min(want);
                 self.energy_field[i] -= available;
-                let gained = available * self.config.absorb_efficiency;
+                let affinity = self.organisms[org_idx].genome.absorb_affinity;
+                let gained = available * self.config.absorb_efficiency * affinity;
                 energy_delta += gained;
                 events.push(WorldEvent::ActionApplied {
                     subject: subject.clone(),

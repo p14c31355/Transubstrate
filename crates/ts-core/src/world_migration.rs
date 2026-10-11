@@ -205,46 +205,48 @@ pub fn run_world_migration(
     for local in 0..(config.ticks - half) {
         let tick = half + local;
         let mut actions: Vec<(String, Action)> = Vec::new();
-        if cadence.fires_on(tick) {
-            if let Some(sub) = network.subject(&sid_str) {
-                let sref = SubjectRef {
-                    subject_id: sid_str.clone(),
-                    pos: (sub.node, 0),
-                    energy: sub.energy,
-                };
-                let observations = network
-                    .observe(&sref)
-                    .map_err(|e| CognitionError::Unavailable(format!("observe failed: {e}")))?;
-                let ctx = DecisionContext {
-                    subject_id: sid_str.clone(),
-                    tick,
-                    energy: sub.energy,
-                    observations,
-                    manifest: network.manifest().clone(),
-                    memory: vec![],
-                };
-                let decision = backend.decide(&ctx)?;
-                crate::cognition::validate_decision(network.manifest(), &decision)?;
-                crate::cognition::charge_cognition(
-                    &mut ledger,
-                    tick,
-                    &crate::cognition::CognitionCost {
-                        cognition_events: 1,
-                        tokens: 0,
-                    },
-                    &sid_str,
-                );
-                log.push(EventPayload::DecisionMade {
-                    subject_id: sid_str.clone(),
-                    tick,
-                    decision: decision.clone(),
-                });
-                if let Some(action) = decision.action {
-                    post_collector.record(Some(&action.name));
-                    actions.push((sid_str.clone(), action));
-                } else {
-                    post_collector.record(None);
-                }
+        let cand = cadence
+            .fires_on(tick)
+            .then(|| network.subject(&sid_str).map(|sub| (sub.node, sub.energy)))
+            .flatten();
+        if let Some((node_pos, energy)) = cand {
+            let sref = SubjectRef {
+                subject_id: sid_str.clone(),
+                pos: (node_pos, 0),
+                energy,
+            };
+            let observations = network
+                .observe(&sref)
+                .map_err(|e| CognitionError::Unavailable(format!("observe failed: {e}")))?;
+            let ctx = DecisionContext {
+                subject_id: sid_str.clone(),
+                tick,
+                energy,
+                observations,
+                manifest: network.manifest().clone(),
+                memory: vec![],
+            };
+            let decision = backend.decide(&ctx)?;
+            crate::cognition::validate_decision(network.manifest(), &decision)?;
+            crate::cognition::charge_cognition(
+                &mut ledger,
+                tick,
+                &crate::cognition::CognitionCost {
+                    cognition_events: 1,
+                    tokens: 0,
+                },
+                &sid_str,
+            );
+            log.push(EventPayload::DecisionMade {
+                subject_id: sid_str.clone(),
+                tick,
+                decision: decision.clone(),
+            });
+            if let Some(action) = decision.action {
+                post_collector.record(Some(&action.name));
+                actions.push((sid_str.clone(), action));
+            } else {
+                post_collector.record(None);
             }
         }
         let world_events = network.tick(&actions);

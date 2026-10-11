@@ -15,9 +15,11 @@ exploration recorded)
       repeats SIGNAL from outcome evidence ("Repeat successful SIGNAL from
       past ticks"); 1/5 seeds adapted post-swap (PR#37,
       docs/experiments/outcome-exploration.md).
-- [ ] Multi-seed outcome-learning statistics: learning incidence, post-swap
-      adaptation rate, and death rate as a function of temperature
-      (0.3/0.7/1.0 × n>=5). Requires batch-runner support or scripted seeds.
+- [x] Multi-seed outcome-learning statistics: sweep-world-migration (PR#39)
+      batch-collected temp 0.3/0.7 at n=5 each. Temp 0.3 dominates: 3/5
+      SIGNAL learning with 0 deaths (vs 2/5 with 2 deaths at 0.7);
+      behavioral 0.65 ± 0.314 (bimodal) — PR#40,
+      docs/experiments/temperature-sweep.md. Temp 1.0 cell queued.
 - [ ] Boundary-anchored memory sampling: memory_retention 0.0 is currently a
       FIFO roll-off artifact (40 decisions/phase vs limit 8); sample the
       buffer AT the boundary to make the dimension discriminating.

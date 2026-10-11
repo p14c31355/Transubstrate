@@ -41,9 +41,12 @@ the batch sweep runner all merged)
       (LLM sampling makes the wipe arm's pre phase diverge); a
       same-trajectory ablation is queued
       (docs/experiments/memory-ablation.md).
-- [ ] Same-trajectory ablation: wipe the buffer but REPLAY the carry arm's
-      pre-swap decisions, isolating memory causation from pre-phase
-      trajectory differences (LLM sampling).
+- [x] Same-trajectory ablation: the wipe arm REPLAYS the carry arm's
+      pre-swap decisions — 5/5 seeds pre-phase exactly matched; ablation
+      effect behavioral +0.68 / retention +0.60 / usage +1.00; wipe arm
+      jumps to uniform SIGNAL saturation 5/5 while the carry arm continues
+      its boundary strategy — memory causally shapes post-swap behavior
+      (docs/experiments/memory-ablation.md).
 
 ## 2. Research experiments
 

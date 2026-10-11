@@ -141,6 +141,66 @@ fn bench_llm_cognition(model: &str, decisions: u64) -> Option<(f64, u64, f64, f6
     Some((dps, decisions, latency, probe_elapsed))
 }
 
+/// Fetch endpoint model metadata (on-disk file size, parameter size,
+/// quantization) from an OpenAI-compatible/Ollama endpoint. Returns None
+/// when the endpoint does not expose it — the benchmark degrades
+/// gracefully. The file size is the ON-DISK footprint, not runtime VRAM;
+/// the section name says so explicitly to avoid overclaiming.
+fn fetch_model_metadata(base_url: &str, model: &str) -> Option<serde_json::Value> {
+    // Ollama-native endpoints. /api/tags carries the model file size and
+    // quantization details; /api/show carries the parameter count.
+    let root = base_url.trim_end_matches("/v1").to_string();
+    let tags_url = format!("{root}/api/tags");
+    let show_url = format!("{root}/api/show");
+
+    let tags_body: serde_json::Value = std::process::Command::new("curl")
+        .args(["-sf", "--max-time", "10", &tags_url])
+        .output()
+        .ok()
+        .and_then(|out| serde_json::from_slice(&out.stdout).ok())?;
+
+    let entry = tags_body["models"]
+        .as_array()?
+        .iter()
+        .find(|m| m["name"].as_str() == Some(model))?;
+
+    let file_size = entry["size"].as_u64();
+    let details = &entry["details"];
+
+    // /api/show is optional (parameter count).
+    let show_body: Option<serde_json::Value> = std::process::Command::new("curl")
+        .args(["-sf", "--max-time", "10", &show_url])
+        .arg(serde_json::json!({ "model": model }).to_string())
+        .output()
+        .ok()
+        .and_then(|out| serde_json::from_slice(&out.stdout).ok());
+    let param_count = show_body
+        .as_ref()
+        .and_then(|show| show["model_info"]["general.parameter_count"].as_u64());
+
+    let mut meta = serde_json::json!({
+        "model": model,
+        "on_disk_bytes": file_size,
+        "note": "on-disk model file size from the endpoint; runtime VRAM is larger and endpoint-dependent",
+    });
+    if let Some(q) = details["quantization_level"].as_str() {
+        meta["quantization"] = serde_json::json!(q);
+    }
+    if let Some(p) = details["parameter_size"].as_str() {
+        meta["parameter_size_label"] = serde_json::json!(p);
+    }
+    if let Some(n) = param_count {
+        meta["parameter_count_exact"] = serde_json::json!(n);
+    }
+    if let Some(arch) = show_body
+        .as_ref()
+        .and_then(|show| show["model_info"]["general.architecture"].as_str())
+    {
+        meta["architecture"] = serde_json::json!(arch);
+    }
+    Some(meta)
+}
+
 /// Run the reference-8gb benchmark.
 pub fn run_benchmark() -> BenchmarkReport {
     let mut sections = Vec::new();
@@ -185,6 +245,21 @@ pub fn run_benchmark() -> BenchmarkReport {
                 "probe_load_s": probe_s
             }),
         });
+
+        // Endpoint model metadata (on-disk footprint etc.) when exposed.
+        let base_url = crate::llm_backend::LlmBackendConfig {
+            model: var.clone(),
+            ..Default::default()
+        }
+        .base_url;
+        if let Some(meta) = fetch_model_metadata(&base_url, &var) {
+            sections.push(BenchmarkSection {
+                name: "llm_model_metadata".into(),
+                value: meta["on_disk_bytes"].as_u64().unwrap_or(0) as f64 / (1024.0 * 1024.0),
+                unit: "MiB_on_disk".into(),
+                params: meta,
+            });
+        }
     }
 
     // --- Peak host RAM (VmHWM via /proc/self/status) ---

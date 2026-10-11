@@ -174,8 +174,10 @@ cargo run --release -- run-population-migration \
 ```
 
 Optionally, set `TS_BENCH_LLM_MODEL=<model>` to also measure local LLM
-cognition throughput (decisions/sec, mean latency). The section is omitted
-when no endpoint is reachable, so the benchmark stays CI-safe.
+cognition throughput (decisions/sec, mean latency) and record the
+endpoint's model metadata (on-disk footprint, quantization, parameter
+size). Sections are omitted when no endpoint is reachable, so the
+benchmark stays CI-safe.
 
 ## License
 

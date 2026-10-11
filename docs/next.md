@@ -147,8 +147,12 @@ the batch sweep runner all merged)
 
 - [x] LLM cognition throughput section in the benchmark (PR#31,
       `TS_BENCH_LLM_MODEL` gate; 3.29 decisions/s on the reference GPU).
-- [ ] Record endpoint model metadata (VRAM footprint) in the benchmark
-      report when the endpoint exposes it.
+- [x] Endpoint model metadata in the benchmark: new `llm_model_metadata`
+      section (on-disk model file size in MiB, quantization level,
+      parameter size label, exact parameter count, architecture) fetched
+      from the Ollama/OpenAI-compatible endpoint; degrades gracefully
+      when not exposed (CI-safe). The section name says ON-DISK — runtime
+      VRAM is larger and endpoint-dependent, and the note says so.
 
 ## Explicitly deferred (do not start without revisiting)
 

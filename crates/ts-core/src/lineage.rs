@@ -55,8 +55,14 @@ impl Genome {
             (base + u * sigma).clamp(lo, hi)
         };
         let s = self.mutation_rate;
+        // The mutation floor follows the parent's threshold when the parent
+        // is BELOW the conventional 20.0: low-threshold lineages (raised
+        // for reproduction-under-scarcity experiments) must be able to
+        // persist, while conventional genomes (>= 20) keep the original
+        // 20..100 band.
+        let threshold_lo = 20.0f32.min(self.division_threshold);
         Genome {
-            division_threshold: jitter(self.division_threshold, s * 10.0, 20.0, 100.0),
+            division_threshold: jitter(self.division_threshold, s * 10.0, threshold_lo, 100.0),
             absorb_affinity: jitter(self.absorb_affinity, s * 0.2, 0.5, 1.5),
             signal_bias: jitter(self.signal_bias, s * 0.2, 0.0, 1.0),
             move_bias: jitter(self.move_bias, s * 0.2, 0.0, 1.0),

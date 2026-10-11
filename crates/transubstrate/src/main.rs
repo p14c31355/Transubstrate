@@ -64,6 +64,10 @@ enum Commands {
         /// default 0.01 regenerates faster than 8 organisms consume).
         #[arg(long, default_value_t = 0.01)]
         regen: f32,
+        /// Founder genome division threshold (default 40.0; lower it so
+        /// lineages can expand under binding scarcity).
+        #[arg(long, default_value_t = 40.0)]
+        divide_threshold: f32,
         #[arg(long, default_value = "runs")]
         out: PathBuf,
     },
@@ -383,6 +387,7 @@ fn main() {
             seed,
             energy,
             regen,
+            divide_threshold,
             out,
         } => {
             let backend_kind = match parse_any_backend(&backend, seed) {
@@ -406,6 +411,7 @@ fn main() {
                     backend: backend_kind,
                     start_energy: energy,
                 },
+                division_threshold: Some(divide_threshold),
             };
             let id = config.experiment_id.to_string();
             let dir = out.join(&id);

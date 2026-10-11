@@ -105,6 +105,12 @@ enum Commands {
         #[arg(long, default_value = "42,7,99,123,2024")]
         seeds: String,
     },
+    /// Run the reference-8gb benchmark harness (M10).
+    Benchmark {
+        /// Output path for the JSON report (default: stdout only).
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
     /// Regenerate metrics from an event log without re-running cognition (M6).
     Replay {
         /// Path to the events.jsonl file.
@@ -516,6 +522,18 @@ fn main() {
                 }
             } else {
                 println!("extinction in all seeds — no comparison possible");
+            }
+        }
+        Commands::Benchmark { out } => {
+            let report = ts_core::benchmark::run_benchmark();
+            let json = serde_json::to_string_pretty(&report).unwrap_or_default();
+            println!("{json}");
+            if let Some(path) = out {
+                if let Some(parent) = path.parent() {
+                    let _ = std::fs::create_dir_all(parent);
+                }
+                let _ = std::fs::write(&path, format!("{json}\n"));
+                println!("report written: {}", path.display());
             }
         }
         Commands::Replay { path } => match ts_core::replay::regenerate_metrics(&path) {

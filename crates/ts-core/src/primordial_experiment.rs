@@ -388,12 +388,12 @@ pub fn run_primordial(
                 let pre_energy = sref.energy;
                 sref.energy = org.energy;
                 sref.pos = org.pos;
-                if let Some(mem) = memories.get_mut(sid) {
-                    if let Some(last) = mem.last_mut() {
-                        if last.reward_signal == 0.0 {
-                            last.reward_signal = org.energy - pre_energy;
-                        }
-                    }
+                let last = memories
+                    .get_mut(sid)
+                    .and_then(|mem| mem.last_mut())
+                    .filter(|last| last.reward_signal == 0.0);
+                if let Some(last) = last {
+                    last.reward_signal = org.energy - pre_energy;
                 }
             }
         }

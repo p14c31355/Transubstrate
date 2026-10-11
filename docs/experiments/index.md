@@ -24,6 +24,7 @@ kept, and nothing here claims emergence.
 | 15 | Outcome-driven exploration (temp 0.7, signal pull) | docs/experiments/outcome-exploration.md | OBSERVED (2/5 seeds learned SIGNAL from outcome-visible memory; 1 seed adapted post-swap; fragility documented) |
 | 16 | Temperature sweep (outcome learning vs temp) | docs/experiments/temperature-sweep.md | OBSERVED (0.3: 3/5 learning, 0 deaths; 0.7: 2/5, 2 deaths; 1.0: 2/4 valid, 1 schema-rejection — fail-safe OBSERVED) |
 | 17 | LLM 5-dimension sweep (memory_usage numbers) | docs/experiments/llm-usage-sweep.md | OBSERVED (n=5 temp 0.3: 4/5 usage 1.0 (swap-robust); seed 123 full strategy replacement 0/0/0 — learning loop visible in vector) |
+| 18 | Cross-model outcome learning (qwen, signal pull) | docs/experiments/cross-model-outcome-learning.md | OBSERVED (4/4 complete runs mix SIGNAL+HOP post-swap with no channel meaning; 1 death/run — aggressive exploration measured) |
 
 ## Running an experiment
 

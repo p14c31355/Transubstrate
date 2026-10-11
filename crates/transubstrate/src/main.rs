@@ -121,10 +121,12 @@ enum Commands {
         /// to reach the emitter (default energy kills them mid-sweep).
         #[arg(long, default_value_t = false)]
         survival: bool,
-        /// Replace ALL rule followers with ONE cognitive follower
-        /// (backend: llm:<model>[:<effort>] | echo | energy-rule | ...).
+        /// Replace ALL rule followers with cognitive followers (backend:
+        /// llm:<model>[:<effort>] | echo | energy-rule | ...). Repeat the
+        /// flag for multiple cognitive followers (convention-formation
+        /// harness).
         #[arg(long)]
-        backend: Option<String>,
+        backend: Vec<String>,
         /// LLM sampling temperature (llm: backends only; 0 = deterministic).
         #[arg(long, default_value_t = 0.0)]
         llm_temperature: f32,
@@ -657,17 +659,24 @@ fn main() {
                 .split(',')
                 .filter_map(|s| s.trim().parse().ok())
                 .collect();
-            if let Some(backend_spec) = &backend {
-                // ---- Cognitive-follower mode: ONE LLM follower ----
+            if !backend.is_empty() {
+                // ---- Cognitive-follower mode: N cognitive subjects ----
+                // Multiple --backend flags give multiple followers; a
+                // single flag gives one (the PR#56 harness).
                 for seed in &seed_list {
-                    let kind = match parse_any_backend(backend_spec, *seed) {
-                        Ok(b) => apply_llm_temperature(b, llm_temperature),
-                        Err(e) => {
-                            eprintln!("{e}");
-                            std::process::exit(2);
-                        }
-                    };
-                    let mut bk = kind.instantiate();
+                    let mut kinds: Vec<ts_core::primordial_experiment::BackendKind> = Vec::new();
+                    for spec in backend.iter() {
+                        let kind = match parse_any_backend(spec, *seed) {
+                            Ok(b) => apply_llm_temperature(b, llm_temperature),
+                            Err(e) => {
+                                eprintln!("{e}");
+                                std::process::exit(2);
+                            }
+                        };
+                        kinds.push(kind);
+                    }
+                    let mut insts: Vec<Box<dyn ts_core::cognition::CognitionBackend>> =
+                        kinds.iter().map(|k| k.instantiate()).collect();
                     let cfg = if survival {
                         ts_core::signaling::SignalingConfig::survival_tuned(*seed, ticks, followers)
                     } else {
@@ -678,30 +687,46 @@ fn main() {
                             ..Default::default()
                         }
                     };
-                    match ts_core::signaling::run_llm_signaling(&cfg, bk.as_mut()) {
-                        Ok(r) => {
-                            let acts: Vec<String> = r
-                                .action_counts
-                                .iter()
-                                .map(|(k, v)| format!("{k}:{v}"))
-                                .collect();
-                            let strengths: Vec<String> = r
-                                .signal_strengths
-                                .iter()
-                                .map(|(k, v)| format!("s{k}:{v}"))
-                                .collect();
-                            println!(
-                                "seed {seed}: backend={} decisions={} alive={} \
-                                 final_energy={:.2} proximity={:.3} actions=[{}] \
-                                 signal_strengths=[{}]",
-                                r.backend_id,
-                                r.decisions,
-                                r.alive,
-                                r.final_energy,
-                                r.mean_proximity,
-                                acts.join(", "),
-                                strengths.join(", ")
-                            );
+                    let mut dyns: Vec<(&str, &mut dyn ts_core::cognition::CognitionBackend)> =
+                        insts
+                            .iter_mut()
+                            .enumerate()
+                            .map(|(i, b)| {
+                                let leaked: &'static str =
+                                    Box::leak(format!("cog-{i:02}").into_boxed_str());
+                                (
+                                    leaked,
+                                    &mut **b as &mut dyn ts_core::cognition::CognitionBackend,
+                                )
+                            })
+                            .collect();
+                    match ts_core::signaling::run_cognitive_signaling(&cfg, &mut dyns) {
+                        Ok(results) => {
+                            for r in &results {
+                                let acts: Vec<String> = r
+                                    .action_counts
+                                    .iter()
+                                    .map(|(k, v)| format!("{k}:{v}"))
+                                    .collect();
+                                let strengths: Vec<String> = r
+                                    .signal_strengths
+                                    .iter()
+                                    .map(|(k, v)| format!("s{k}:{v}"))
+                                    .collect();
+                                println!(
+                                    "seed {seed}: {} backend={} decisions={} alive={} \
+                                     final_energy={:.2} proximity={:.3} actions=[{}] \
+                                     signal_strengths=[{}]",
+                                    r.subject_id,
+                                    r.backend_id,
+                                    r.decisions,
+                                    r.alive,
+                                    r.final_energy,
+                                    r.mean_proximity,
+                                    acts.join(", "),
+                                    strengths.join(", ")
+                                );
+                            }
                         }
                         Err(e) => println!("seed {seed}: FAILED ({e})"),
                     }

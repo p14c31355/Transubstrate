@@ -80,9 +80,15 @@ the batch sweep runner all merged)
       converged on the emitter (proximity 1.0) — the world now has
       subjects that can both listen and broadcast
       (docs/experiments/llm-signaling.md).
-- [ ] Convention formation across cognitive subjects: multiple LLM
-      followers in one signaling world; do listeners start responding to a
-      specific emitter's signal (detection metric from PR#50)?
+- [x] Convention formation, first attempt: NEGATIVE (n=1) — 2 LLM
+      followers independently converge on the null-signal strategy
+      (strength 0.0, invisible to each other), proximity 0.000; neither
+      responds to the rule emitter's signal at temp 0.3 (rule followers
+      converge at 0.98+). Structure exists, behavior does not — honest
+      negative recorded (docs/experiments/convention-formation.md).
+- [ ] Convention formation, temperature arm: repeat the 2-follower run at
+      temp 0.7 (migration runs showed outcome-learning there) and n=3
+      seeds; the null-signal attractor may be a temp-0.3 mode.
 - [ ] Chemical-field meaning formation (the semantics-free substrate is
       still unused by controllers).
 - [ ] Carrying capacity: tune regen vs consumption so the field actually

@@ -34,6 +34,10 @@ pub enum BackendKind {
         absorb_threshold: f32,
         divide_probe: f32,
     },
+    /// Signal-seeking positive control for the network world.
+    SignalSeeker {
+        signal_threshold: f32,
+    },
     Malformed,
     /// Local LLM via OpenAI-compatible endpoint. One SHARED backend serves
     /// the whole population (the model loads once; VRAM does not scale with
@@ -60,6 +64,11 @@ impl BackendKind {
                 absorb_threshold: *absorb_threshold,
                 divide_probe: *divide_probe,
             }),
+            BackendKind::SignalSeeker { signal_threshold } => {
+                Box::new(crate::backends::SignalSeekerBackend {
+                    signal_threshold: *signal_threshold,
+                })
+            }
             BackendKind::Malformed => Box::new(crate::backends::MalformedBackend::default()),
             BackendKind::Llm { config } => {
                 Box::new(crate::llm_backend::LlmBackend::new(config.clone()))
@@ -73,6 +82,7 @@ impl BackendKind {
             BackendKind::Random { .. } => "mock-random-v0",
             BackendKind::EnergyRule { .. } => "rule-energy-v0",
             BackendKind::ReproducingRule { .. } => "rule-energy-divide-v0",
+            BackendKind::SignalSeeker { .. } => "rule-signal-seeker-v0",
             BackendKind::Malformed => "mock-malformed-v0",
             BackendKind::Llm { .. } => "llm-openai-compat-v0",
         }

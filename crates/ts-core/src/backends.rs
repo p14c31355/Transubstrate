@@ -105,6 +105,85 @@ impl CognitionBackend for RandomBackend {
     }
 }
 
+/// Simple signal-seeking rule for the network world: SIGNAL when
+/// "nearby_signal_0" is below threshold (to attract energy), then ABSORB
+/// when the pulled energy has concentrated. Doubles as a positive control
+/// for network-world experiments (mirrors EnergyRuleBackend's style).
+#[derive(Clone, Debug)]
+pub struct SignalSeekerBackend {
+    /// nearby_signal_0 below which the rule emits SIGNAL.
+    pub signal_threshold: f32,
+}
+
+impl Default for SignalSeekerBackend {
+    fn default() -> Self {
+        Self {
+            signal_threshold: 0.1,
+        }
+    }
+}
+
+impl CognitionBackend for SignalSeekerBackend {
+    fn implementation(&self) -> &'static str {
+        "rule-signal-seeker-v0"
+    }
+
+    fn decide(&mut self, ctx: &DecisionContext) -> Result<Decision, CognitionError> {
+        let signal_seen = ctx
+            .observations
+            .iter()
+            .find(|o| o.channel == "nearby_signal_0")
+            .map(|o| o.value)
+            .unwrap_or(0.0);
+        // local_energy gates survival: when own energy is low, absorb
+        // whatever the current world offers (works in both worlds).
+        let energy_seen = ctx
+            .observations
+            .iter()
+            .find(|o| o.channel == "local_energy")
+            .map(|o| o.value)
+            .unwrap_or(0.0);
+
+        // Priority: survive (absorb when energy is low) → seed the signal
+        // (when no signal is present) → harvest (when a signal is present).
+        let action = if energy_seen < self.signal_threshold {
+            ctx.manifest
+                .actions
+                .iter()
+                .find(|a| a.name == "ABSORB")
+                .map(|schema| Action {
+                    name: schema.name.clone(),
+                    params: vec![1.0],
+                })
+        } else if signal_seen < self.signal_threshold {
+            ctx.manifest
+                .actions
+                .iter()
+                .find(|a| a.name == "SIGNAL")
+                .map(|schema| Action {
+                    name: schema.name.clone(),
+                    params: vec![1.0],
+                })
+        } else {
+            ctx.manifest
+                .actions
+                .iter()
+                .find(|a| a.name == "ABSORB")
+                .map(|schema| Action {
+                    name: schema.name.clone(),
+                    params: vec![1.0],
+                })
+        };
+
+        Ok(Decision {
+            action,
+            rationale: format!(
+                "rule(signal-seeker): local_energy={energy_seen:.3} nearby_signal_0={signal_seen:.3}"
+            ),
+        })
+    }
+}
+
 /// Simple energy-seeking rule: if a "local_energy" channel observation is
 /// available and above threshold, ABSORB; otherwise WAIT. Written against
 /// channel names by design — it is a *rule-based* controller, and doubles as

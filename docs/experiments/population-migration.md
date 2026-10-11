@@ -58,10 +58,38 @@ Population: behavioral continuity **0.281 ± 0.418**, memory usage
 - All four members survived the boundary; the migration itself is not
   lethal at these parameters.
 
+## LLM POPULATION (OBSERVED, n=4 members, same model granite4.1:3b-q4_K_M,
+temp 0.3, seed 42, 400 ticks)
+
+| member | continuity | usage | final energy |
+|--------|-----------|-------|--------------|
+| pop-00 | 0.9500    | 1.0000 | 0.32 (starving) |
+| pop-01 | 0.0500    | 1.0000 | 0.29 (starving) |
+| pop-02 | 0.0250    | 1.0000 | 54.25 (healthy) |
+| pop-03 | 0.0500    | 1.0000 | 0.29 (starving) |
+
+Population: behavioral continuity **0.269 ± 0.393**, memory usage
+1.000 ± 0.000.
+
+- **Extreme divergence under the SAME model**: one member at 0.95
+  (near-perfect continuity), three at 0.03-0.05 (full strategy change).
+  At temp 0.3 the tiny per-decision sampling differences compound into
+  divergent primordial experiences, and divergent experiences produce
+  divergent post-boundary strategies. Policy variance (rule population)
+  and sampling-plus-experience variance (LLM population) produce similar
+  spreads (0.281 vs 0.269) through completely different mechanisms.
+- **Resource stratification**: 3/4 members end starving (<1 energy) while
+  one holds 54 — early position/luck differences compound under shared
+  cognition.
+- **Dimension independence, again**: memory usage 1.0 for ALL members
+  while behavioral continuity spans 0.025-0.95 — re-enacting remembered
+  actions and keeping the same action distribution are different things.
+
 ## CAVEATS
 
-- Deterministic backends, single seed shown; LLM members would add
-  sampling variance on top of policy variance (harness accepts them).
+- Deterministic-backend section: single seed shown; LLM section: n=4
+  members at temp 0.3, one seed — the sampling variance is now MEASURED
+  (see LLM POPULATION), not projected.
 - Memory usage is saturating in this configuration (all 1.0) — it
   discriminates only when boundary strategies differ from post strategies
   (as in the single-subject ablation experiments).

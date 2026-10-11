@@ -162,6 +162,17 @@ cargo run --release -- sweep-world-migration --seeds 42,7,99,123,2026 \
     --summary summary.json
 ```
 
+Populations can migrate too: `run-population-migration` moves one subject
+per `--backends` entry through the same boundary and reports per-subject
+continuity plus the population spread — the individual-differences view
+of continuity:
+
+```sh
+cargo run --release -- run-population-migration \
+    --backends energy-rule,energy-rule,echo,signal-seeker \
+    --ticks 400 --seed 42
+```
+
 Optionally, set `TS_BENCH_LLM_MODEL=<model>` to also measure local LLM
 cognition throughput (decisions/sec, mean latency). The section is omitted
 when no endpoint is reachable, so the benchmark stays CI-safe.

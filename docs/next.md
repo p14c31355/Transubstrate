@@ -115,9 +115,13 @@ the batch sweep runner all merged)
       form-only continuity at zero energy, signal-seeker 0.125 = strategy
       flip); determinism check passes (same backend → same reading)
       (docs/experiments/population-migration.md).
-- [ ] LLM members in the population migration: sampling variance on top
-      of policy variance; per-subject continuity distribution for a
-      same-model population.
+- [x] LLM members in the population migration (4× granite, temp 0.3):
+      EXTREME same-model divergence — one member 0.95, three 0.03-0.05;
+      population 0.269 ± 0.393 (rule population: 0.281 ± 0.418 via policy
+      variance — similar spread, different mechanism); resource
+      stratification 3/4 starving vs 1 healthy; memory usage 1.0 for all
+      while behavior spans 0.025-0.95 (dimension independence)
+      (docs/experiments/population-migration.md).
 
 ## 4. Infrastructure
 

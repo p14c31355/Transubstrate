@@ -2,6 +2,7 @@
 //! cognition backends, resource accounting, event logs.
 
 pub mod backends;
+pub mod benchmark;
 pub mod cognition;
 pub mod competition;
 pub mod continuity;

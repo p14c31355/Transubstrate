@@ -83,3 +83,12 @@ All notable changes to Transubstrate are documented here.
   primordial (grid) to network (ring) at midpoint with carried-over energy;
   pre/post fingerprints + same-world control continuity
 - 79 tests passing
+
+### Added (bench/reference-8gb, unmerged)
+- BenchmarkReport/BenchmarkSection (reference-8gb): world tick throughput
+  (1/8/32 orgs), mock cognition decisions/sec, peak host RAM (VmHWM),
+  event log bytes per 1000 ticks (8 orgs)
+- CLI `benchmark [--out report.json]`
+- Measured on reference machine: ~139k ticks/s (1 org), ~130k (8 orgs),
+  ~84k (32 orgs), mock decisions ~5.8M/s, peak host RAM ~3.4 MiB,
+  ~315KB log per 1000 ticks (8 orgs)

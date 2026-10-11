@@ -158,17 +158,7 @@ fn parse_migration_backend(
     name: &str,
     seed: u64,
 ) -> Result<ts_core::primordial_experiment::BackendKind, String> {
-    use ts_core::primordial_experiment::BackendKind as PB;
-    match name {
-        "echo" => Ok(PB::Echo),
-        "random" => Ok(PB::Random { seed }),
-        "energy-rule" => Ok(PB::EnergyRule {
-            absorb_threshold: 0.3,
-        }),
-        other => Err(format!(
-            "unknown backend '{other}' (expected echo|random|energy-rule)"
-        )),
-    }
+    parse_any_backend(name, seed)
 }
 
 fn main() {

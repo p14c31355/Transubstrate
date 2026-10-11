@@ -44,10 +44,12 @@ exploration recorded)
 - [x] Signal-driven energy pull: SIGNAL now has a resource payoff;
       signal-seeker flips SIGNAL→ABSORB across the boundary (PR#30–#33,
       docs/experiments/signal-pull.md).
-- [ ] Signaling-convention detection (multi-subject): with signal pull,
-      do OTHER subjects flock to/harvest at another's signal? Define the
-      detection metric before running; single-subject learning is already
-      OBSERVED (PR#37).
+        for i in 0..config.followers {
+            let sid = format!("follower-{i:02}");
+            if let Some(s) = world.subject(&sid) {
+                actions.push((sid.clone(), follower_action(&mut world, &sid, s.energy)));
+            }
+        }
 - [ ] Chemical-field meaning formation (the semantics-free substrate is
       still unused by controllers).
 - [ ] Carrying capacity: tune regen vs consumption so the field actually

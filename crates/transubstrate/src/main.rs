@@ -105,6 +105,16 @@ enum Commands {
         #[arg(long, default_value = "42,7,99,123,2024")]
         seeds: String,
     },
+    /// Run the multi-subject signaling experiment: emitter vs followers on
+    /// the signal-pull ring, contrasted against a no-pull null run.
+    RunSignaling {
+        #[arg(long, default_value_t = 600)]
+        ticks: u64,
+        #[arg(long, default_value_t = 6)]
+        followers: u32,
+        #[arg(long, default_value = "42,7,99,123,2024")]
+        seeds: String,
+    },
     /// Run the reference-8gb benchmark harness (M10).
     Benchmark {
         /// Output path for the JSON report (default: stdout only).
@@ -597,6 +607,50 @@ fn main() {
                 }
             } else {
                 println!("extinction in all seeds — no comparison possible");
+            }
+        }
+        Commands::RunSignaling {
+            ticks,
+            followers,
+            seeds,
+        } => {
+            let seed_list: Vec<u64> = seeds
+                .split(',')
+                .filter_map(|s| s.trim().parse().ok())
+                .collect();
+            println!(
+                "{:>6} {:>10} {:>10} {:>12} {:>12} {:>9} {:>9}",
+                "seed", "proximity", "nullProx", "intake/tick", "nullIntake", "alive", "emitter"
+            );
+            let mut prox_wins = 0u32;
+            let mut intake_wins = 0u32;
+            let mut valid = 0u32;
+            for seed in &seed_list {
+                let cfg = ts_core::signaling::SignalingConfig {
+                    world_seed: *seed,
+                    ticks,
+                    followers,
+                    ..Default::default()
+                };
+                let (sp, np, si, ni) = ts_core::signaling::run_contrast(&cfg);
+                let r = ts_core::signaling::run_signaling(&cfg);
+                if sp > np {
+                    prox_wins += 1;
+                }
+                if si > ni {
+                    intake_wins += 1;
+                }
+                valid += 1;
+                println!(
+                    "{:>6} {:>10.3} {:>10.3} {:>12.3} {:>12.3} {:>9} {:>9}",
+                    seed, sp, np, si, ni, r.followers_alive, r.emitter_alive
+                );
+            }
+            if valid > 0 {
+                println!(
+                    "attraction wins: {prox_wins}/{valid} seeds; intake wins: \
+                     {intake_wins}/{valid} seeds (null run = no pull)"
+                );
             }
         }
         Commands::Benchmark { out } => {

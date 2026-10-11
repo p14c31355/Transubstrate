@@ -233,6 +233,41 @@ impl ContinuityVector {
         }
         self.dimensions.iter().map(|d| d.value).sum::<f32>() / self.dimensions.len() as f32
     }
+
+    /// Boundary-anchored memory usage: of the decisions the subject REMEMBERED
+    /// at the migration boundary (the `boundary` snapshot), how many did it
+    /// REPEAT in the post-migration window (`post_observations`, given as
+    /// action names observed after the swap)?
+    ///
+    /// This is the "memory USE" dimension the FIFO roll-off problem hid: even
+    /// when the buffer has fully rolled over by the end of the run, the
+    /// subject can still act on what it remembered AT the boundary. Value in
+    /// [0,1]; 0 = none of the boundary memories were re-enacted, 1 = every
+    /// boundary memory's action was re-enacted at least once afterwards.
+    ///
+    /// Computation: |{boundary actions} ∩ {post actions}| /
+    /// max(1, |{boundary actions}|) over action-name sets.
+    pub fn memory_usage(
+        boundary: &[crate::cognition::MemoryEntry],
+        post_action_names: &[String],
+    ) -> ContinuityDimension {
+        let boundary_actions: std::collections::BTreeSet<String> =
+            boundary.iter().map(|m| m.action.name.clone()).collect();
+        let post_actions: std::collections::BTreeSet<String> =
+            post_action_names.iter().cloned().collect();
+        let reused = boundary_actions.intersection(&post_actions).count() as f32;
+        let boundary_total = boundary_actions.len() as f32;
+        let value = (reused / boundary_total.max(1.0)).clamp(0.0, 1.0);
+        ContinuityDimension {
+            name: "memory_usage".into(),
+            value,
+            computation: format!(
+                "set_match(boundary_actions ∩ post_actions)/|boundary_actions|; \
+                 reused={reused} boundary_n={boundary_total} post_n={}",
+                post_actions.len()
+            ),
+        }
+    }
 }
 
 /// Collect action names from a decision log slice (already filtered).
@@ -250,6 +285,18 @@ impl ActionCollector {
     pub fn record(&mut self, action_name: Option<&str>) {
         self.actions
             .push(action_name.unwrap_or("<none>").to_string());
+    }
+
+    /// Distinct action names recorded (excluding the `<none>` placeholder) —
+    /// the set used by memory_usage.
+    pub fn distinct_action_names(&self) -> Vec<String> {
+        let names: std::collections::BTreeSet<String> = self
+            .actions
+            .iter()
+            .filter(|a| a.as_str() != "<none>")
+            .cloned()
+            .collect();
+        names.into_iter().collect()
     }
 
     pub fn fingerprint(&self) -> BehaviorFingerprint {
@@ -406,5 +453,43 @@ mod tests {
         let d = ContinuityVector::memory_retention(&[], &[entry("WAIT", 0.0)]);
         assert!(d.value.abs() < 1e-6);
         assert!(d.computation.contains("pre_n=0"));
+    }
+
+    #[test]
+    fn memory_usage_full_when_boundary_actions_reenacted() {
+        // The subject remembered ABSORB and SIGNAL at the boundary, and both
+        // were re-enacted in the post window — full usage.
+        let boundary = vec![entry("ABSORB", 1.2), entry("SIGNAL", 0.6)];
+        let post = vec![
+            "ABSORB".to_string(),
+            "SIGNAL".to_string(),
+            "WAIT".to_string(),
+        ];
+        let d = ContinuityVector::memory_usage(&boundary, &post);
+        assert!((d.value - 1.0).abs() < 1e-6, "got {}", d.value);
+        assert_eq!(d.name, "memory_usage");
+    }
+
+    #[test]
+    fn memory_usage_partial_when_some_reenacted() {
+        let boundary = vec![entry("ABSORB", 1.2), entry("SIGNAL", 0.6)];
+        let post = vec!["ABSORB".to_string(), "WAIT".to_string()];
+        let d = ContinuityVector::memory_usage(&boundary, &post);
+        assert!((d.value - 0.5).abs() < 1e-6, "got {}", d.value);
+    }
+
+    #[test]
+    fn memory_usage_zero_when_boundary_actions_dropped() {
+        let boundary = vec![entry("SIGNAL", 0.6)];
+        let post = vec!["ABSORB".to_string()];
+        let d = ContinuityVector::memory_usage(&boundary, &post);
+        assert!(d.value.abs() < 1e-6, "got {}", d.value);
+    }
+
+    #[test]
+    fn memory_usage_empty_boundary_is_neutral() {
+        let d = ContinuityVector::memory_usage(&[], &["ABSORB".to_string()]);
+        assert!(d.value.abs() < 1e-6);
+        assert!(d.computation.contains("boundary_n=0"));
     }
 }

@@ -27,8 +27,9 @@ exploration recorded)
       re-enacted post-swap. Calibrated: rule→LLM 1.0, rule→echo 0.0,
       world-migration signal-seeker 0.5 (SIGNAL→ABSORB flip = partial
       usage). Wired into BOTH harnesses; not masked by FIFO roll-off.
-- [ ] Cross-model outcome learning: does qwen3.5 (thinking-style, reasoning
-      off) also learn SIGNAL from outcomes at temp>0?
+- [x] Cross-model outcome learning: qwen3.5 explores SIGNAL+HOP actively in
+      the signal-pull world with no channel meaning (4/4 complete runs, one
+      energy death per run) — docs/experiments/cross-model-outcome-learning.md.
 - [x] Record memory_usage numbers for LLM runs: temp-0.3 5-dimension sweep
       (PR#47 record, n=5) — 4/5 usage 1.0 (swap-robust), 1 seed 0.0 across
       all dimensions (full strategy replacement ABSORB→SIGNAL).

@@ -33,6 +33,17 @@ the batch sweep runner all merged)
 - [x] Record memory_usage numbers for LLM runs: temp-0.3 5-dimension sweep
       (PR#47 record, n=5) — 4/5 usage 1.0 (swap-robust), 1 seed 0.0 across
       all dimensions (full strategy replacement ABSORB→SIGNAL).
+- [x] Memory ablation (CAUSAL): `memory_carry: bool` + boundary wipe in BOTH
+      harnesses; `--no-memory` CLI flag; per-seed ablation arm in
+      `sweep-world-migration` (carry − wipe effect in the JSON summary).
+      Rule calibration 0.0 (true negative); LLM n=5: behavioral +0.50,
+      retention +0.55, usage +0.80 — with a DISCLOSED pre-phase confound
+      (LLM sampling makes the wipe arm's pre phase diverge); a
+      same-trajectory ablation is queued
+      (docs/experiments/memory-ablation.md).
+- [ ] Same-trajectory ablation: wipe the buffer but REPLAY the carry arm's
+      pre-swap decisions, isolating memory causation from pre-phase
+      trajectory differences (LLM sampling).
 
 ## 2. Research experiments
 

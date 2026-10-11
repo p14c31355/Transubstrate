@@ -71,9 +71,16 @@ Last updated: 2026-10-11 (PR#45-#47 arc — LLM memory_usage numbers recorded)
   post-swap, immune to FIFO roll-off. Wired into BOTH harnesses; world-
   migration calibration: signal-seeker usage 0.5 (SIGNAL→ABSORB strategy
   flip re-enacted half its boundary memory), control 1.0, effect −0.5.
+- **Memory ablation — causal carry-vs-wipe (PR#52 arc)**: `memory_carry:
+  bool` in both migration configs + boundary wipe + per-seed ablation arm
+  (`--no-memory` CLI; `ablation_effect` in sweep JSON). Calibration:
+  rule→echo ablation effect 0.0 across all dimensions — rule backends do
+  not read memory, a true negative (no detector artifact). LLM carry-vs-
+  wipe comparison recorded in docs/experiments/memory-ablation.md.
 - **CLI**: `run-test`, `run-primordial`, `run-migration`, `run-world-migration`,
-  `benchmark`, `replay`, `verify`, `inspect`. Backends: echo, random,
-  energy-rule, reproducing-rule, `llm:<model>`.
+  `sweep-world-migration`, `run-signaling`, `benchmark`, `replay`, `verify`,
+  `inspect`. Backends: echo, random, energy-rule, reproducing-rule,
+  signal-seeker, `llm:<model>[:<effort>]`.
 - **CI**: GitHub Actions — fmt, clippy -D warnings, tests, release build.
 
 ## What has been measured (CALIBRATION data, not findings about emergence)

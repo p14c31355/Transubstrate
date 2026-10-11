@@ -79,6 +79,9 @@ enum Commands {
         seed: u64,
         #[arg(long, default_value_t = 30.0)]
         energy: f32,
+        /// Wipe the subject's memory at the migration boundary (ablation).
+        #[arg(long, default_value_t = false)]
+        no_memory: bool,
         #[arg(long, default_value = "runs")]
         out: PathBuf,
     },
@@ -137,6 +140,9 @@ enum Commands {
         seed: u64,
         #[arg(long, default_value_t = 20.0)]
         energy: f32,
+        /// Wipe the subject's memory at the migration boundary (ablation).
+        #[arg(long, default_value_t = false)]
+        no_memory: bool,
         #[arg(long, default_value = "runs")]
         out: PathBuf,
     },
@@ -158,6 +164,11 @@ enum Commands {
         llm_temperature: f32,
         #[arg(long, default_value_t = 20.0)]
         energy: f32,
+        /// Wipe the subject's memory at the migration boundary in every run
+        /// (pure ablation sweep; default sweep also emits a carry-vs-wipe
+        /// ablation arm per seed).
+        #[arg(long, default_value_t = false)]
+        no_memory: bool,
         /// Output directory for per-seed runs.
         #[arg(long, default_value = "runs")]
         out: PathBuf,
@@ -413,6 +424,7 @@ fn main() {
             backend_b,
             seed,
             energy,
+            no_memory,
             out,
         } => {
             let bk_a = match parse_migration_backend(&backend_a, seed) {
@@ -438,6 +450,7 @@ fn main() {
                 start_energy: energy,
                 backend_a: bk_a,
                 backend_b: bk_b,
+                memory_carry: !no_memory,
             };
             let id = config.experiment_id.to_string();
             let log_path = out.join(&id).join("events.jsonl");
@@ -468,6 +481,18 @@ fn main() {
                         "migration effect (migration - control): {:+.4}",
                         result.migration_effect
                     );
+                    if let Some((ablated, abl_effect)) = &result.ablation {
+                        println!("ablation run (memory wiped at boundary):");
+                        for dim in &ablated.dimensions {
+                            println!("continuity ({}): {:.4}", dim.name, dim.value);
+                            println!("  computation: {}", dim.computation);
+                        }
+                        println!("ablation effect (carry - wipe; positive = memory helped):");
+                        for dim in &abl_effect.dimensions {
+                            println!("  {}: {:+.4}", dim.name, dim.value);
+                            println!("    computation: {}", dim.computation);
+                        }
+                    }
                     println!("event log: {}", log_path.display());
                 }
                 Err(e) => {
@@ -672,6 +697,7 @@ fn main() {
             llm_temperature,
             seed,
             energy,
+            no_memory,
             out,
         } => {
             let backend_kind = match parse_any_backend(&backend, seed) {
@@ -690,6 +716,7 @@ fn main() {
                 start_energy: energy,
                 backend: backend_kind,
                 network: Default::default(),
+                memory_carry: !no_memory,
             };
             let id = config.experiment_id.to_string();
             let log_path = out.join(&id).join("events.jsonl");
@@ -720,6 +747,20 @@ fn main() {
                         println!("  {}: {:+.4}", d.name, d.value);
                         println!("    computation: {}", d.computation);
                     }
+                    if let Some(ablated) = &result.ablation_continuity {
+                        println!("ablation run (memory wiped at boundary):");
+                        for d in &ablated.dimensions {
+                            println!("  continuity {}: {:.4}", d.name, d.value);
+                            println!("    computation: {}", d.computation);
+                        }
+                    }
+                    if let Some(abl_effect) = &result.ablation_effect {
+                        println!("ablation effect (carry - wipe; positive = memory helped):");
+                        for d in &abl_effect.dimensions {
+                            println!("  {}: {:+.4}", d.name, d.value);
+                            println!("    computation: {}", d.computation);
+                        }
+                    }
                     println!("event log: {}", log_path.display());
                 }
                 Err(e) => {
@@ -735,6 +776,7 @@ fn main() {
             backend,
             llm_temperature,
             energy,
+            no_memory,
             out,
             summary,
         } => {
@@ -748,6 +790,8 @@ fn main() {
             let mut dim_series: std::collections::BTreeMap<String, Vec<f32>> =
                 std::collections::BTreeMap::new();
             let mut dim_effect_series: std::collections::BTreeMap<String, Vec<f32>> =
+                std::collections::BTreeMap::new();
+            let mut dim_ablation_series: std::collections::BTreeMap<String, Vec<f32>> =
                 std::collections::BTreeMap::new();
 
             for seed in &seeds {
@@ -767,6 +811,7 @@ fn main() {
                     start_energy: energy,
                     backend: backend_kind,
                     network: Default::default(),
+                    memory_carry: !no_memory,
                 };
                 let id = config.experiment_id.to_string();
                 let log_path = out.join(&id).join("events.jsonl");
@@ -786,6 +831,14 @@ fn main() {
                                 .entry(d.name.clone())
                                 .or_default()
                                 .push(d.value);
+                        }
+                        if let Some(abl) = &result.ablation_effect {
+                            for d in &abl.dimensions {
+                                dim_ablation_series
+                                    .entry(d.name.clone())
+                                    .or_default()
+                                    .push(d.value);
+                            }
                         }
                         println!("seed {seed}: ok ({id})");
                         per_seed.push(entry);
@@ -824,12 +877,14 @@ fn main() {
                 "sweep_kind": "world_migration",
                 "backend": backend,
                 "llm_temperature": llm_temperature,
+                "memory_carry": !no_memory,
                 "ticks": ticks,
                 "cognition_interval": cognition_interval,
                 "seeds": seeds,
                 "per_seed": per_seed,
                 "continuity": summarize(&dim_series),
                 "effect": summarize(&dim_effect_series),
+                "ablation_effect": summarize(&dim_ablation_series),
             });
             let pretty = serde_json::to_string_pretty(&sweep_summary).unwrap_or_default();
             println!("{pretty}");

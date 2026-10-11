@@ -418,6 +418,11 @@ pub fn run_migration_experiment(
     // ---- Continuity measurement ----
     let behavioral = ContinuityVector::behavioral(&phase_a.fingerprint, &phase_b.fingerprint);
     let memory_continuity = ContinuityVector::memory_retention(&memory_pre, &memory);
+    // Boundary-anchored memory USE: did the subject re-enact any of the
+    // actions it remembered AT the boundary, during the post-swap window?
+    // (FIFO roll-off makes memory_retention read 0.0; usage is not masked.)
+    let memory_usage =
+        ContinuityVector::memory_usage(&memory_pre, &collector_b.distinct_action_names());
     let control_continuity = ContinuityVector::behavioral(
         &control_a.phases[0].fingerprint,
         &control_a.phases[1].fingerprint,
@@ -427,7 +432,7 @@ pub fn run_migration_experiment(
     let continuity = ContinuityVector {
         subject_id: sid.clone(),
         migration_id: Some(migration.migration_id.clone()),
-        dimensions: vec![behavioral, memory_continuity],
+        dimensions: vec![behavioral, memory_continuity, memory_usage],
     };
 
     log.push(EventPayload::ExperimentFinished {

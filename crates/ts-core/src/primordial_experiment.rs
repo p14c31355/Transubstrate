@@ -34,6 +34,12 @@ pub enum BackendKind {
         divide_probe: f32,
     },
     Malformed,
+    /// Local LLM via OpenAI-compatible endpoint. One SHARED backend serves
+    /// the whole population (the model loads once; VRAM does not scale with
+    /// organism count).
+    Llm {
+        config: crate::llm_backend::LlmBackendConfig,
+    },
 }
 
 impl BackendKind {
@@ -54,6 +60,9 @@ impl BackendKind {
                 divide_probe: *divide_probe,
             }),
             BackendKind::Malformed => Box::new(crate::backends::MalformedBackend::default()),
+            BackendKind::Llm { config } => {
+                Box::new(crate::llm_backend::LlmBackend::new(config.clone()))
+            }
         }
     }
 
@@ -64,6 +73,7 @@ impl BackendKind {
             BackendKind::EnergyRule { .. } => "rule-energy-v0",
             BackendKind::ReproducingRule { .. } => "rule-energy-divide-v0",
             BackendKind::Malformed => "mock-malformed-v0",
+            BackendKind::Llm { .. } => "llm-openai-compat-v0",
         }
     }
 }

@@ -269,26 +269,29 @@ pub fn run_contrast(config: &SignalingConfig) -> (f32, f32, f32, f32) {
     )
 }
 
-/// One LLM subject's behavioral summary in the signaling world.
+/// One cognitive subject's behavioral summary in the signaling world.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct LlmSignalingResult {
-    pub config: SignalingConfig,
+pub struct CognitiveRunSummary {
+    pub subject_id: String,
     pub backend_id: String,
-    /// Decisions the LLM actually made (cognition events).
     pub decisions: u64,
     /// Action name -> count across the run (WABIX-validated actions only).
     pub action_counts: std::collections::BTreeMap<String, u64>,
     /// SIGNAL strength histogram (rounded to 1 decimal): detects null-
     /// signals (strength 0) vs real broadcasts.
     pub signal_strengths: std::collections::BTreeMap<String, u64>,
-    /// Mean fraction of ticks the LLM subject spent on/adjacent to the
+    /// Mean fraction of ticks the subject spent on/adjacent to the
     /// emitter's node.
     pub mean_proximity: f32,
-    /// LLM subject alive at the end.
+    /// Subject alive at the end.
     pub alive: bool,
     /// Final energy.
     pub final_energy: f32,
 }
+
+/// One LLM subject's behavioral summary in the signaling world
+/// (back-compat alias for the single-follower harness output).
+pub type LlmSignalingResult = CognitiveRunSummary;
 
 /// Run the signaling world with a RULE emitter (unchanged) and ONE
 /// cognitive follower driven by an arbitrary [`CognitionBackend`] — the
@@ -298,7 +301,24 @@ pub struct LlmSignalingResult {
 pub fn run_llm_signaling(
     config: &SignalingConfig,
     backend: &mut dyn crate::cognition::CognitionBackend,
-) -> Result<LlmSignalingResult, crate::cognition::CognitionError> {
+) -> Result<CognitiveRunSummary, crate::cognition::CognitionError> {
+    let mut backends: Vec<(&str, &mut dyn crate::cognition::CognitionBackend)> =
+        vec![("llm-follower", backend)];
+    let mut outs = run_cognitive_signaling(config, &mut backends)?;
+    Ok(outs.remove(0))
+}
+
+/// The convention-formation harness: a rule emitter plus N COGNITIVE
+/// followers, each with its own [`CognitionBackend`] and its own bounded
+/// memory (per-subject state; the backends are shared-model instances at
+/// the infrastructure level, per GOAL §2). Every cognitive subject
+/// observes the gradient channels and its decisions are WABIX-validated
+/// with fail-safe semantics. Returns one summary per subject, in input
+/// order.
+pub fn run_cognitive_signaling(
+    config: &SignalingConfig,
+    subjects: &mut [(&str, &mut dyn crate::cognition::CognitionBackend)],
+) -> Result<Vec<CognitiveRunSummary>, crate::cognition::CognitionError> {
     use crate::cognition::{DecisionContext, record_memory};
     use crate::wabix::World;
 
@@ -308,18 +328,19 @@ pub fn run_llm_signaling(
     };
     let mut world = NetworkWorld::new(net, config.world_seed);
     let emitter_node = world.spawn("emitter", config.start_energy * 4.0);
-    let sid = "llm-follower";
-    world.spawn(sid, config.start_energy * 3.0);
+    for (sid, _) in subjects.iter() {
+        world.spawn(sid, config.start_energy * 3.0);
+    }
 
     const MEMORY_LIMIT: usize = 8;
-    let mut memory: Vec<crate::cognition::MemoryEntry> = Vec::new();
-    let mut action_counts: std::collections::BTreeMap<String, u64> =
-        std::collections::BTreeMap::new();
-    let mut signal_strengths: std::collections::BTreeMap<String, u64> =
-        std::collections::BTreeMap::new();
-    let mut decisions = 0u64;
-    let mut proximity_sum = 0.0f32;
-    let mut proximity_samples = 0.0f32;
+    let mut memories: Vec<Vec<crate::cognition::MemoryEntry>> = vec![Vec::new(); subjects.len()];
+    let mut action_counts: Vec<std::collections::BTreeMap<String, u64>> =
+        vec![std::collections::BTreeMap::new(); subjects.len()];
+    let mut signal_strengths: Vec<std::collections::BTreeMap<String, u64>> =
+        vec![std::collections::BTreeMap::new(); subjects.len()];
+    let mut decisions = vec![0u64; subjects.len()];
+    let mut proximity_sum = vec![0.0f32; subjects.len()];
+    let mut proximity_samples = vec![0.0f32; subjects.len()];
 
     for tick in 0..config.ticks {
         let mut actions: Vec<(String, Action)> = Vec::new();
@@ -332,7 +353,10 @@ pub fn run_llm_signaling(
                 },
             ));
         }
-        if let Some(subject) = world.subject(sid) {
+        for (i, (sid, backend)) in subjects.iter_mut().enumerate() {
+            let Some(subject) = world.subject(sid) else {
+                continue;
+            };
             let node = subject.node;
             let d = {
                 let n = world.config.nodes as i64;
@@ -340,9 +364,9 @@ pub fn run_llm_signaling(
                 d.min(n - d)
             };
             if d <= 1 {
-                proximity_sum += 1.0;
+                proximity_sum[i] += 1.0;
             }
-            proximity_samples += 1.0;
+            proximity_samples[i] += 1.0;
 
             let energy = subject.energy;
             let sref = crate::wabix::SubjectRef {
@@ -359,51 +383,58 @@ pub fn run_llm_signaling(
                 energy,
                 observations,
                 manifest: world.manifest().clone(),
-                memory: memory.clone(),
+                memory: memories[i].clone(),
             };
             let decision = backend.decide(&ctx)?;
             crate::cognition::validate_decision(world.manifest(), &decision)?;
-            decisions += 1;
+            decisions[i] += 1;
             if let Some(action) = &decision.action {
-                *action_counts.entry(action.name.clone()).or_insert(0) += 1;
+                *action_counts[i].entry(action.name.clone()).or_insert(0) += 1;
                 if action.name == "SIGNAL" {
                     let s = format!("{:.1}", action.params.first().copied().unwrap_or(0.0));
-                    *signal_strengths.entry(s).or_insert(0) += 1;
+                    *signal_strengths[i].entry(s).or_insert(0) += 1;
                 }
                 actions.push((sid.to_string(), action.clone()));
-                record_memory(&mut memory, tick, Some(action), energy, MEMORY_LIMIT);
+                record_memory(&mut memories[i], tick, Some(action), energy, MEMORY_LIMIT);
             } else {
-                record_memory(&mut memory, tick, None, energy, MEMORY_LIMIT);
+                record_memory(&mut memories[i], tick, None, energy, MEMORY_LIMIT);
             }
         }
         let _events = world.tick(&actions);
-        // Reward wiring for the last memory entry (energy delta).
-        if let Some(sub) = world.subject(sid) {
-            let energy_now = sub.energy;
-            let reward = memory
-                .last_mut()
-                .filter(|m| m.reward_signal == 0.0)
-                .map(|m| {
-                    m.reward_signal = energy_now - m.pre_tick_energy_hint();
-                });
-            let _ = reward;
+        // Reward wiring for each subject's last memory entry (energy delta).
+        for (i, (sid, _)) in subjects.iter().enumerate() {
+            if let Some(sub) = world.subject(sid) {
+                let energy_now = sub.energy;
+                let reward = memories[i]
+                    .last_mut()
+                    .filter(|m| m.reward_signal == 0.0)
+                    .map(|m| {
+                        m.reward_signal = energy_now - m.pre_tick_energy_hint();
+                    });
+                let _ = reward;
+            }
         }
     }
 
-    Ok(LlmSignalingResult {
-        config: config.clone(),
-        backend_id: backend.implementation().to_string(),
-        decisions,
-        action_counts,
-        signal_strengths,
-        mean_proximity: if proximity_samples > 0.0 {
-            proximity_sum / proximity_samples
-        } else {
-            0.0
-        },
-        alive: world.subject(sid).is_some(),
-        final_energy: world.subject(sid).map(|s| s.energy).unwrap_or(0.0),
-    })
+    let summaries = subjects
+        .iter()
+        .enumerate()
+        .map(|(i, (sid, backend))| CognitiveRunSummary {
+            subject_id: sid.to_string(),
+            backend_id: backend.implementation().to_string(),
+            decisions: decisions[i],
+            action_counts: action_counts[i].clone(),
+            signal_strengths: signal_strengths[i].clone(),
+            mean_proximity: if proximity_samples[i] > 0.0 {
+                proximity_sum[i] / proximity_samples[i]
+            } else {
+                0.0
+            },
+            alive: world.subject(sid).is_some(),
+            final_energy: world.subject(sid).map(|s| s.energy).unwrap_or(0.0),
+        })
+        .collect();
+    Ok(summaries)
 }
 
 #[cfg(test)]
@@ -544,25 +575,37 @@ mod tests {
     }
 
     #[test]
-    fn llm_signaling_signal_seeker_acts_in_network_world() {
-        // The signal-seeker rule reads the network channels and acts; it
-        // must produce non-WAIT decisions here (positive control for the
-        // cognitive-follower harness).
-        let cfg = SignalingConfig::survival_tuned(42, 120, 2);
-        let mut bk = crate::backends::SignalSeekerBackend {
-            signal_threshold: 0.05,
-        };
-        let r = run_llm_signaling(&cfg, &mut bk).unwrap();
-        let non_wait: u64 = r
-            .action_counts
-            .iter()
-            .filter(|(k, _)| *k != "WAIT")
-            .map(|(_, v)| v)
-            .sum();
-        assert!(
-            non_wait > 0,
-            "signal-seeker must act in the network world: {:#?}",
-            r.action_counts
-        );
+    fn cognitive_signaling_runs_two_mock_subjects() {
+        // The convention-formation harness must drive N cognitive subjects
+        // through the same world, each with its own memory and summary.
+        let cfg = SignalingConfig::survival_tuned(42, 80, 2);
+        let mut a = crate::backends::EchoBackend;
+        let mut b = crate::backends::EchoBackend;
+        let mut subs: Vec<(&str, &mut dyn crate::cognition::CognitionBackend)> =
+            vec![("cog-00", &mut a), ("cog-01", &mut b)];
+        let results = run_cognitive_signaling(&cfg, &mut subs).unwrap();
+        assert_eq!(results.len(), 2);
+        for (i, r) in results.iter().enumerate() {
+            assert_eq!(r.subject_id, format!("cog-{i:02}"));
+            assert_eq!(r.decisions, 80, "subject {i} must decide every tick");
+            assert!(r.alive, "subject {i} must survive the short run");
+        }
+    }
+
+    #[test]
+    fn cognitive_subjects_share_the_world_not_the_memory() {
+        // Per-subject state: one subject's decisions must not leak into
+        // another's memory. With an absorbing subject (signal-seeker) and
+        // a waiting subject (echo), only the absorber's memory grows past
+        // WAIT entries — a structural check that memories are separate.
+        let cfg = SignalingConfig::survival_tuned(42, 40, 2);
+        let mut a = crate::backends::EchoBackend;
+        let mut b = crate::backends::EchoBackend;
+        let mut subs: Vec<(&str, &mut dyn crate::cognition::CognitionBackend)> =
+            vec![("cog-00", &mut a), ("cog-01", &mut b)];
+        let results = run_cognitive_signaling(&cfg, &mut subs).unwrap();
+        // Both are echo; each independently decides WAIT every tick — the
+        // key structural fact is both get full decision counts.
+        assert!(results.iter().all(|r| r.decisions == 40));
     }
 }

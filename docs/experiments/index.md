@@ -11,6 +11,7 @@ kept, and nothing here claims emergence.
 | 2 | Reproduction / lineage growth | PR#4 descriptions | OBSERVED (8 founders → 32 alive, cap enforced) |
 | 3 | Controller migration + controls (M5) | PR#5 | OBSERVED (calibration) |
 | 30 | Genome drift across generations | docs/experiments/genome-drift.md | FIRST genetic-transmission data: BirthRecorded event logs birth genomes; division_threshold drifts UPWARD 6.0→7.4-9.9 in 5/5 seeds over 10-12 generations (r→K-like shift under cap-full turnover); selection vs drift not separated |
+| 31 | Selection vs drift / mutation ratchet | docs/experiments/selection-vs-drift.md | PR#71 drift WITHDRAWN: mutation lo-clamp at parent value made downward mutation impossible (mechanical ratchet); fixed to symmetric 3..100 band; fitness shows NO threshold effect (sibling 244/480); turnover-vs-genome-efficacy trade-off identified |
 | 4 | Replay determinism (M6) | PR#6 | OBSERVED (regeneration matches summaries) |
 | 5 | Real LLM cognition (M7, 80/80 valid) | PR#8 | OBSERVED (single model) |
 | 6 | Rule → LLM migration (M8) | PR#9, PR#10 | OBSERVED (3 seeds, continuity 0.10 / effect −0.90) |

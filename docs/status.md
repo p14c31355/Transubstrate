@@ -139,6 +139,16 @@ Last updated: 2026-10-11 (PR#52-#57 arc — memory ablation, signaling economics
   under the identical harness — post-migration behavior is model-dependent.
 - LLM integration (M7): granite4.1:3b-q4_K_M produced valid typed decisions
   in 80/80 cognition events on the reference GPU; zero schema rejections.
+- Mutation-ratchet correction (selection-vs-drift.md): PR#71's
+  directional drift was a MUTATION-OPERATOR ARTIFACT — the PR#65 floor
+  fix clamped the lower mutation bound at the parent's value (downward
+  mutation structurally impossible). Fixed to a symmetric 3..100 band;
+  fitness measurements show NO threshold effect on survival (within-
+  family sibling test 244/480 = coin flip; birth-count correlation
+  −0.106). A genuine selection-vs-drift test is still OPEN: it requires
+  generations AND an effective genome, which the current regimes cannot
+  provide simultaneously (probe 1.0 decorrelates the genome, probe 0.4
+  freezes births).
 - Genetic transmission (FIRST POSITIVE, 5/5 seeds): `BirthRecorded`
   logs every birth genome; in the turnover regime the division
   threshold drifts UPWARD from 6.0 to 7.4-9.9 over 10-12 generations in

@@ -42,6 +42,16 @@ across all 5 seeds.
 
 ## INTERPRETATION (INFERENCES, mechanism not proven)
 
+**CORRECTION (selection-vs-drift.md, next PR): the directional drift
+turned out to be a MUTATION-OPERATOR ARTIFACT** — the PR#65 floor fix
+clamped the lower mutation bound at the parent's value, making downward
+mutation structurally impossible (a mechanical ratchet). The clamp is
+fixed (symmetric 3..100 band) and the "directional force" reading is
+withdrawn; fitness measurements show NO threshold effect on individual
+survival (sibling test 244/480 = coin flip). See
+selection-vs-drift.md for the full correction and the regime trade-off
+that now blocks the re-test.
+
 - Consistent direction across 5 independent seeds is hard to explain
   by neutral drift alone — a directional force is present.
 - Plausible mechanism (untested): a higher threshold means the parent

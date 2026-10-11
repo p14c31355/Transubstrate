@@ -120,9 +120,14 @@ the batch sweep runner all merged)
 ## 3. M9 continuation — world migration
 
 - [x] Runnable end-to-end with control + effect vector (PR#22, #28).
-- [ ] Observation-adaptation metric: how quickly does behavior adapt to the
-      new manifest's channel names (node_energy vs local_energy)? Needs the
-      active decision surface above.
+- [x] Observation-adaptation metric: `compute_observation_adaptation` —
+      lag_ticks (ticks until the pre-swap dominant action loses majority
+      in a trailing 10-decision window) + persists (does the displacing
+      action hold through the late post half). Rule calibration: lag 0
+      stable. Granite 0.3 fresh sweep: 5/5 ABSORB→SIGNAL (lag 0 ×4,
+      50 ×1), all persist; archive runs of the same seeds diverge (2/5)
+      = sampling non-determinism across sessions; qwen switch reverts
+      (docs/experiments/observation-adaptation.md).
 - [x] Population world migration (`run-population-migration`): 4-member
       mixed-backend population migrated together — per-subject continuity
       spread 0.281 ± 0.418 (energy-rule 0.0 = swap-fragile, echo 1.0 =

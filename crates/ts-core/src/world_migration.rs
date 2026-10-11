@@ -63,6 +63,142 @@ impl Default for WorldMigrationConfig {
     }
 }
 
+/// How quickly did behavior adapt to the new world after the migration
+/// boundary? Measured on the decision stream, not the observations
+/// themselves: the pre-swap dominant action defines the subject's
+/// established strategy; the lag counts ticks until that strategy loses
+/// majority in a trailing decision window of the post-swap phase.
+///
+/// The persistence flag separates real strategy change from sampling
+/// noise: an immediate switch (lag 0) that reverts later is NOT stable
+/// adaptation, while a slower switch that holds through the late
+/// post-swap half is. Both fields are None when the subject never left
+/// its pre-swap dominant strategy.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ObservationAdaptation {
+    /// Ticks after the boundary until the pre-swap dominant action first
+    /// drops below half of a trailing decision window. None = never
+    /// displaced during the run.
+    pub lag_ticks: Option<u64>,
+    /// The action that displaced the pre-swap dominant one.
+    pub new_action: Option<String>,
+    /// Whether the displacing action still holds at least half of the
+    /// LATE post-swap decisions (second half of the post phase).
+    /// Some(false) = switched once and reverted (noise), Some(true) =
+    /// the new strategy held. None when no displacement happened.
+    pub persists: Option<bool>,
+}
+
+/// Number of consecutive decisions per evaluation window for the
+/// adaptation metric. Windowed (not per-decision) so single exploratory
+/// deviations do not read as adaptation.
+pub const ADAPTATION_WINDOW: usize = 10;
+
+/// Compute the observation-adaptation metrics from an event-log record
+/// stream. `boundary` is the migration tick (decisions with
+/// tick < boundary are pre-swap, the rest post-swap).
+pub fn compute_observation_adaptation(
+    records: &[crate::event_log::EventRecord],
+    boundary: u64,
+) -> ObservationAdaptation {
+    use crate::event_log::EventPayload;
+    let mut actions: Vec<(u64, String)> = Vec::new();
+    for rec in records {
+        if let EventPayload::DecisionMade { tick, decision, .. } = &rec.payload {
+            let name = decision
+                .action
+                .as_ref()
+                .map(|a| a.name.clone())
+                .unwrap_or_else(|| "WAIT".to_string());
+            actions.push((*tick, name));
+        }
+    }
+    // Records arrive in log order; the metric needs strict tick order.
+    actions.sort_by_key(|(t, _)| *t);
+    let pre: Vec<&String> = actions
+        .iter()
+        .filter(|(t, _)| *t < boundary)
+        .map(|(_, a)| a)
+        .collect();
+    if pre.is_empty() {
+        return ObservationAdaptation {
+            lag_ticks: None,
+            new_action: None,
+            persists: None,
+        };
+    }
+    // Pre-swap dominant action (ties broken by first-seen order via max_by).
+    let mut counts: std::collections::BTreeMap<&str, usize> = std::collections::BTreeMap::new();
+    for a in &pre {
+        *counts.entry(a.as_str()).or_insert(0) += 1;
+    }
+    let dominant = counts
+        .iter()
+        .max_by_key(|(_, c)| **c)
+        .map(|(a, _)| a.to_string())
+        .expect("non-empty pre phase");
+
+    let post: Vec<(u64, &str)> = actions
+        .iter()
+        .filter(|(t, _)| *t >= boundary)
+        .map(|(t, a)| (*t, a.as_str()))
+        .collect();
+
+    // First trailing window where the dominant action falls below half.
+    let mut lag = None;
+    let mut displaced_by = None;
+    for chunk in post.chunks(ADAPTATION_WINDOW) {
+        // A trailing partial window smaller than half a full window
+        // cannot distinguish adaptation from a single stray decision.
+        if chunk.len() < ADAPTATION_WINDOW / 2 {
+            break;
+        }
+        let keep = chunk
+            .iter()
+            .filter(|(_, a)| *a == dominant.as_str())
+            .count();
+        if (keep as f64) < chunk.len() as f64 * 0.5 {
+            lag = Some(chunk[0].0.saturating_sub(boundary));
+            displaced_by = chunk
+                .iter()
+                .filter(|(_, a)| *a != dominant.as_str())
+                .map(|(_, a)| a.to_string())
+                .next();
+            break;
+        }
+    }
+    let (lag, new_action) = match (lag, displaced_by) {
+        (Some(l), Some(a)) => (Some(l), Some(a)),
+        _ => {
+            return ObservationAdaptation {
+                lag_ticks: None,
+                new_action: None,
+                persists: None,
+            };
+        }
+    };
+
+    // Persistence: does the new action hold >= half of the LATE post
+    // decisions (second half of the post phase, by count)?
+    let post_total = post.len();
+    let late_start = post_total / 2;
+    let late = &post[late_start..];
+    let holds = late
+        .iter()
+        .filter(|(_, a)| Some((*a).to_string()) == new_action)
+        .count();
+    let persists = if late.is_empty() {
+        None
+    } else {
+        Some((holds as f64) >= late.len() as f64 * 0.5)
+    };
+    ObservationAdaptation {
+        lag_ticks: lag,
+        new_action,
+        persists,
+    }
+}
+
 /// World-migration experiment result.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WorldMigrationResult {
@@ -83,6 +219,9 @@ pub struct WorldMigrationResult {
     /// ablation_continuity − continuity per dimension (positive = carrying
     /// memory helped that dimension). None when memory_carry is true.
     pub ablation_effect: Option<crate::continuity::ContinuityVector>,
+    /// How fast behavior adapted to the destination world after the
+    /// boundary (decision-stream metric; see ObservationAdaptation).
+    pub observation_adaptation: ObservationAdaptation,
 }
 
 /// Run a world migration: subject starts in the primordial world, migrates
@@ -491,6 +630,12 @@ pub fn run_world_migration_experiment(
         });
     }
 
+    // Observation adaptation: measured on the migration run's own log
+    // (the control has no boundary, so adaptation is undefined there).
+    let mig_records = crate::event_log::read_log(log_path)
+        .map_err(|e| CognitionError::Unavailable(format!("adaptation: {e}")))?;
+    let observation_adaptation = compute_observation_adaptation(&mig_records, config.ticks / 2);
+
     Ok(WorldMigrationResult {
         experiment_id: config.experiment_id.to_string(),
         migration,
@@ -503,6 +648,7 @@ pub fn run_world_migration_experiment(
         },
         ablation_continuity,
         ablation_effect,
+        observation_adaptation,
     })
 }
 
@@ -937,6 +1083,104 @@ pub fn run_population_migration(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ---- observation-adaptation metric (decision-stream) ----
+
+    use crate::cognition::Decision;
+    use crate::event_log::EventRecord;
+    use crate::wabix::Action;
+
+    fn decision_record(tick: u64, action: Option<&str>) -> EventRecord {
+        let decision = Decision {
+            action: action.map(|name| Action {
+                name: name.to_string(),
+                params: vec![],
+            }),
+            rationale: "test".to_string(),
+        };
+        EventRecord {
+            seq: tick,
+            log_version: crate::event_log::EVENT_LOG_VERSION,
+            payload: crate::event_log::EventPayload::DecisionMade {
+                subject_id: "test-subject".to_string(),
+                tick,
+                decision,
+            },
+        }
+    }
+
+    fn records(actions: &[(u64, Option<&str>)]) -> Vec<EventRecord> {
+        actions
+            .iter()
+            .map(|(t, a)| decision_record(*t, *a))
+            .collect()
+    }
+
+    #[test]
+    fn adaptation_lag_and_persistence() {
+        // 10 ABSORB pre-swap (ticks 0..=90, cadence 10), then post-swap:
+        // 10 more ABSORB (boundary 100..190), then 10 SIGNAL (200..290).
+        let mut post: Vec<(u64, Option<&str>)> = Vec::new();
+        for i in 0..10u64 {
+            post.push((100 + i * 10, Some("ABSORB")));
+        }
+        for i in 0..10u64 {
+            post.push((200 + i * 10, Some("SIGNAL")));
+        }
+        let all: Vec<(u64, Option<&str>)> = (0..10u64)
+            .map(|i| (i * 10, Some("ABSORB")))
+            .chain(post)
+            .collect();
+        let recs = records(&all);
+        let ad = compute_observation_adaptation(&recs, 100);
+        assert_eq!(ad.lag_ticks, Some(100));
+        assert_eq!(ad.new_action.as_deref(), Some("SIGNAL"));
+        assert_eq!(ad.persists, Some(true));
+    }
+
+    #[test]
+    fn adaptation_none_when_strategy_holds() {
+        let all: Vec<(u64, Option<&str>)> = (0..40u64).map(|i| (i * 10, Some("ABSORB"))).collect();
+        let recs = records(&all);
+        let ad = compute_observation_adaptation(&recs, 200);
+        assert_eq!(ad.lag_ticks, None);
+        assert_eq!(ad.new_action, None);
+        assert_eq!(ad.persists, None);
+    }
+
+    #[test]
+    fn adaptation_persists_false_when_reverted() {
+        // Pre: ABSORB x10. Post first half: SIGNAL x10 (displacement),
+        // second half: back to ABSORB (revert -> persists = false).
+        let mut all: Vec<(u64, Option<&str>)> =
+            (0..10u64).map(|i| (i * 10, Some("ABSORB"))).collect();
+        for i in 0..10u64 {
+            all.push((100 + i * 10, Some("SIGNAL")));
+        }
+        for i in 0..10u64 {
+            all.push((200 + i * 10, Some("ABSORB")));
+        }
+        let recs = records(&all);
+        let ad = compute_observation_adaptation(&recs, 100);
+        // The very first post window is all-SIGNAL, so displacement is
+        // immediate: lag 0. The late post half is back to ABSORB, so the
+        // switch does NOT persist (noise, not adaptation).
+        assert_eq!(ad.lag_ticks, Some(0));
+        assert_eq!(ad.new_action.as_deref(), Some("SIGNAL"));
+        assert_eq!(ad.persists, Some(false));
+    }
+
+    #[test]
+    fn adaptation_single_deviation_is_not_adaptation() {
+        // One exploratory SIGNAL inside an otherwise ABSORB post phase
+        // must NOT register (windowed metric).
+        let mut all: Vec<(u64, Option<&str>)> =
+            (0..30u64).map(|i| (i * 10, Some("ABSORB"))).collect();
+        all[10] = (100, Some("SIGNAL"));
+        let recs = records(&all);
+        let ad = compute_observation_adaptation(&recs, 100);
+        assert_eq!(ad.lag_ticks, None);
+    }
 
     #[test]
     fn world_migration_produces_continuity_vector() {

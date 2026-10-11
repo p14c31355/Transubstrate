@@ -139,6 +139,12 @@ Last updated: 2026-10-11 (PR#52-#57 arc — memory ablation, signaling economics
   under the identical harness — post-migration behavior is model-dependent.
 - LLM integration (M7): granite4.1:3b-q4_K_M produced valid typed decisions
   in 80/80 cognition events on the reference GPU; zero schema rejections.
+- Observation adaptation speed (decision-stream lag+persistence): rule
+  backend lag 0 stable (re-evaluates from observations); granite temp 0.3
+  fresh sweep 5/5 displace ABSORB→SIGNAL (lag 0 ×4, 50 ×1), all persist;
+  archive runs of the same seeds diverge (2/5) — LLM sampling is
+  non-deterministic across sessions, so multi-seed stats are mandatory;
+  qwen 1/5 switch reverts (observation-adaptation.md).
 
 ## What has NOT been demonstrated
 

@@ -903,6 +903,29 @@ fn main() {
                             println!("    computation: {}", d.computation);
                         }
                     }
+                    let ad = &result.observation_adaptation;
+                    match (&ad.lag_ticks, &ad.persists) {
+                        (Some(lag), persist) => {
+                            println!("observation adaptation: lag {} ticks after boundary", lag);
+                            if let Some(act) = &ad.new_action {
+                                println!("  displaced by: {}", act);
+                            }
+                            match persist {
+                                Some(true) => {
+                                    println!("  persists: yes (holds through late post-swap)")
+                                }
+                                Some(false) => println!(
+                                    "  persists: no (reverted; sampling noise, not adaptation)"
+                                ),
+                                None => {}
+                            }
+                        }
+                        (None, _) => {
+                            println!(
+                                "observation adaptation: none (pre-swap strategy held to the end)"
+                            );
+                        }
+                    }
                     println!("event log: {}", log_path.display());
                 }
                 Err(e) => {
@@ -982,6 +1005,11 @@ fn main() {
                                     .push(d.value);
                             }
                         }
+                        entry["observation_adaptation"] = serde_json::json!({
+                            "lag_ticks": result.observation_adaptation.lag_ticks,
+                            "new_action": result.observation_adaptation.new_action,
+                            "persists": result.observation_adaptation.persists,
+                        });
                         println!("seed {seed}: ok ({id})");
                         per_seed.push(entry);
                     }

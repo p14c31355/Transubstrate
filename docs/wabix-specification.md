@@ -139,7 +139,13 @@ its energy and the action is lost.
 | World | implementation id | Topology | Channels | Actions |
 |---|---|---|---|---|
 | TestWorld | `test-world-v0` | n/a (counter) | counter, jitter | WAIT, BUMP |
-| PrimordialWorld | `primordial-v0` | 2D grid | local_energy, chemical_0, nearby_signal_0 | WAIT, ABSORB, RELEASE, SIGNAL, MOVE, DIVIDE |
+| PrimordialWorld | `primordial-v0` | 2D grid | local_energy, chemical_0, nearby_signal_0 | WAIT, ABSORB, RELEASE(channel), SIGNAL, MOVE, DIVIDE |
+
+Note: as of the chemical-substrate change, `RELEASE` takes TWO parameters
+`(channel, amount)` — channel 0 returns energy to the cell's energy field,
+channel 1 writes the cell's chemical field (sense-only; nothing absorbs
+it). One-parameter `RELEASE` forms are a schema violation (fail-safe
+rejects them).
 | NetworkWorld | `network-v0` | ring | node_energy, nearby_signal_0, degree | WAIT, ABSORB, SIGNAL, HOP |
 
 Multi-organism worlds (primordial, network) implement `step()` as

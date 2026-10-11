@@ -142,6 +142,13 @@ For exploration-grade runs (outcome-visible memory + sampling), pass
 [docs/experiments/outcome-exploration.md](docs/experiments/outcome-exploration.md)
 for the observed experience-driven SIGNAL learning.
 
+Multi-seed sweeps emit a machine-readable mean ± sd summary:
+
+```sh
+cargo run --release -- sweep-world-migration --seeds 1,7,42,99,123 \
+    --backend energy-rule --summary summary.json
+```
+
 Optionally, set `TS_BENCH_LLM_MODEL=<model>` to also measure local LLM
 cognition throughput (decisions/sec, mean latency). The section is omitted
 when no endpoint is reachable, so the benchmark stays CI-safe.

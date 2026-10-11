@@ -120,6 +120,9 @@ enum Commands {
         /// Cognition backend: echo | random | energy-rule
         #[arg(long, default_value = "energy-rule")]
         backend: String,
+        /// LLM sampling temperature (llm: backends only; 0 = deterministic).
+        #[arg(long, default_value_t = 0.0)]
+        llm_temperature: f32,
         #[arg(long, default_value_t = 42)]
         seed: u64,
         #[arg(long, default_value_t = 20.0)]
@@ -181,6 +184,22 @@ fn parse_primordial_backend(
         other => Err(format!(
             "unknown backend '{other}' (expected echo|random|energy-rule|reproducing-rule|signal-seeker)"
         )),
+    }
+}
+
+/// Apply a CLI-specified LLM temperature to an llm: backend kind (no-op for
+/// non-LLM backends).
+fn apply_llm_temperature(
+    kind: ts_core::primordial_experiment::BackendKind,
+    temperature: f32,
+) -> ts_core::primordial_experiment::BackendKind {
+    use ts_core::primordial_experiment::BackendKind as PB;
+    match kind {
+        PB::Llm { mut config } => {
+            config.temperature = temperature;
+            PB::Llm { config }
+        }
+        other => other,
     }
 }
 
@@ -571,12 +590,13 @@ fn main() {
             ticks,
             cognition_interval,
             backend,
+            llm_temperature,
             seed,
             energy,
             out,
         } => {
             let backend_kind = match parse_any_backend(&backend, seed) {
-                Ok(b) => b,
+                Ok(b) => apply_llm_temperature(b, llm_temperature),
                 Err(e) => {
                     eprintln!("{e}");
                     std::process::exit(2);

@@ -137,6 +137,11 @@ Measures world tick throughput (1/8/32 organisms), mock cognition throughput,
 peak host RAM, and event log size. See [docs/status.md](docs/status.md) for
 measured numbers.
 
+For exploration-grade runs (outcome-visible memory + sampling), pass
+`--llm-temperature 0.7` to `run-world-migration`; see
+[docs/experiments/outcome-exploration.md](docs/experiments/outcome-exploration.md)
+for the observed experience-driven SIGNAL learning.
+
 Optionally, set `TS_BENCH_LLM_MODEL=<model>` to also measure local LLM
 cognition throughput (decisions/sec, mean latency). The section is omitted
 when no endpoint is reachable, so the benchmark stays CI-safe.

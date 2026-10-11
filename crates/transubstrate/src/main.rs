@@ -117,6 +117,10 @@ enum Commands {
         followers: u32,
         #[arg(long, default_value = "42,7,99,123,2024")]
         seeds: String,
+        /// Give followers a sweep-sized energy budget so they can survive
+        /// to reach the emitter (default energy kills them mid-sweep).
+        #[arg(long, default_value_t = false)]
+        survival: bool,
     },
     /// Run the reference-8gb benchmark harness (M10).
     Benchmark {
@@ -638,6 +642,7 @@ fn main() {
             ticks,
             followers,
             seeds,
+            survival,
         } => {
             let seed_list: Vec<u64> = seeds
                 .split(',')
@@ -651,11 +656,15 @@ fn main() {
             let mut intake_wins = 0u32;
             let mut valid = 0u32;
             for seed in &seed_list {
-                let cfg = ts_core::signaling::SignalingConfig {
-                    world_seed: *seed,
-                    ticks,
-                    followers,
-                    ..Default::default()
+                let cfg = if survival {
+                    ts_core::signaling::SignalingConfig::survival_tuned(*seed, ticks, followers)
+                } else {
+                    ts_core::signaling::SignalingConfig {
+                        world_seed: *seed,
+                        ticks,
+                        followers,
+                        ..Default::default()
+                    }
                 };
                 let (sp, np, si, ni) = ts_core::signaling::run_contrast(&cfg);
                 let r = ts_core::signaling::run_signaling(&cfg);

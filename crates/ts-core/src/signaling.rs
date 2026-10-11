@@ -60,6 +60,26 @@ impl Default for SignalingConfig {
     }
 }
 
+impl SignalingConfig {
+    /// Survival-tuned variant: enough start energy for a follower to sweep
+    /// the whole ring (metabolism 0.05/tick over 600 ticks = 30 units, plus
+    /// HOP costs) before it must live off the emitter's pulled-in energy.
+    /// The default energy (12) covers only ~240 ticks — the disclosed
+    /// negative result in docs/experiments/signaling-followers.md.
+    pub fn survival_tuned(world_seed: u64, ticks: u64, followers: u32) -> Self {
+        // Energy needed to survive the sweep: ticks * metabolism + hop headroom.
+        let metabolism = NetworkConfig::default().metabolism;
+        let sweep_budget = ticks as f32 * metabolism + 10.0;
+        Self {
+            world_seed,
+            ticks,
+            followers,
+            start_energy: sweep_budget,
+            ..Default::default()
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SignalingResult {
     pub config: SignalingConfig,
@@ -293,5 +313,42 @@ mod tests {
             }
         }
         assert!(wins >= 3, "intake advantage must win most seeds: {wins}/5");
+    }
+
+    #[test]
+    fn survival_tuned_followers_outlive_the_sweep() {
+        // The default-energy run kills every follower within 600 ticks
+        // (disclosed negative result). With a sweep-sized energy budget the
+        // followers must survive to reach the emitter and live off its
+        // pulled-in energy — the attraction payoff becomes livable.
+        let seeds = [42u64, 7, 99, 123, 2024];
+        for seed in seeds {
+            let cfg = SignalingConfig::survival_tuned(seed, 600, 6);
+            let r = run_signaling(&cfg);
+            assert!(
+                r.followers_alive > 0,
+                "seed {seed}: survival-tuned followers must outlive the run (alive={})",
+                r.followers_alive
+            );
+        }
+    }
+
+    #[test]
+    fn survival_tuned_attraction_persists() {
+        // Survival tuning must not erase the attraction effect: proximity
+        // in the signal run should still beat the null run on aggregate.
+        let seeds = [42u64, 7, 99, 123, 2024];
+        let mut total_signal = 0.0f32;
+        let mut total_null = 0.0f32;
+        for seed in seeds {
+            let cfg = SignalingConfig::survival_tuned(seed, 600, 6);
+            let (sp, np, _, _) = run_contrast(&cfg);
+            total_signal += sp;
+            total_null += np;
+        }
+        assert!(
+            total_signal > total_null,
+            "survival-tuned attraction must exceed null: {total_signal} vs {total_null}"
+        );
     }
 }

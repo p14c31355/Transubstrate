@@ -63,9 +63,14 @@ the batch sweep runner all merged)
       substrate; survival economics fail under current parameters (all
       followers die in 600 ticks) — negative result disclosed
       (docs/experiments/signaling-followers.md).
-- [ ] Survival-tuned follower run: higher follower start energy / stronger
-      pull / neighbor-node harvesting so followers outlive one ring circuit;
-      then a multi-subject LLM signaling run.
+- [x] Survival-tuned follower run: sweep-sized energy budget (40 units)
+      lets 5/6 followers survive 600 ticks in 5/5 seeds; intake ≈2.6× null
+      (up from 2.1×); attraction narrows to a small margin (4/5) — harvest
+      is the robust effect; signal-gradient steering queued
+      (docs/experiments/signaling-followers.md).
+- [ ] Signal-gradient observation (nearby_signal_left/right) so followers
+      can steer toward the emitter; shared substrate with chemical-field
+      meaning formation. Then a multi-subject LLM signaling run.
 - [ ] Chemical-field meaning formation (the semantics-free substrate is
       still unused by controllers).
 - [ ] Carrying capacity: tune regen vs consumption so the field actually

@@ -3,6 +3,7 @@
 
 pub mod backends;
 pub mod benchmark;
+pub mod chem_convention;
 pub mod cognition;
 pub mod competition;
 pub mod continuity;

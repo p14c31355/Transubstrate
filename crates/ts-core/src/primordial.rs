@@ -27,6 +27,7 @@ pub fn primordial_manifest() -> CapabilityManifest {
     ManifestBuilder::new(WORLD_IMPLEMENTATION)
         .channel("local_energy", "scalar", (0.0, 1.0))
         .channel("chemical_0", "scalar", (0.0, 1.0))
+        .channel("nearby_chemical_0", "scalar", (0.0, 1.0))
         .channel("nearby_signal_0", "scalar", (0.0, 1.0))
         .action("WAIT", 0, vec![])
         .action("ABSORB", 1, vec![(0.0, 1.0)])
@@ -335,6 +336,11 @@ impl PrimordialWorld {
                 let channel = action.params.get(1).copied().unwrap_or(0.0);
                 if channel >= 0.5 {
                     self.chemical_field[i] += amount;
+                    events.push(WorldEvent::ChemicalMarked {
+                        subject: subject.clone(),
+                        pos: (x, y),
+                        amount,
+                    });
                 } else {
                     self.energy_field[i] += amount;
                 }
@@ -506,6 +512,20 @@ impl World for PrimordialWorld {
                 "nearby_signal_0",
                 (self.signal_field[i] / FIELD_NORMALIZATION).clamp(0.0, 1.0),
             ),
+            // Chemical gradient reach: the strongest chemical reading among
+            // this cell and its 4 neighbors. Chemical marks are written by
+            // RELEASE(channel 1) and diffuse one cell per tick, so a
+            // stationary subject cannot sense a distant mark through
+            // `chemical_0` alone — this channel extends the gradient's
+            // observable range to the diffusion radius (mirrors the
+            // nearby_signal_0 non-local sensing precedent).
+            Observation::new("nearby_chemical_0", {
+                let mut m = self.chemical_field[i];
+                for (nx, ny) in self.neighbors4(x, y) {
+                    m = m.max(self.chemical_field[self.idx(nx, ny)]);
+                }
+                (m / FIELD_NORMALIZATION).clamp(0.0, 1.0)
+            }),
             // NOTE: the cell's resource field is deliberately NOT observable
             // directly in v0 — subjects must probe it through ABSORB outcomes.
             // This keeps sensing honest and makes exploration meaningful.

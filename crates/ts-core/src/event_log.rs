@@ -37,6 +37,16 @@ pub enum EventPayload {
         tick: u64,
         decision: Decision,
     },
+    /// The observation snapshot at decision time (normalized channels the
+    /// subject SAW). Recorded per cognition event so post-hoc analyzers can
+    /// correlate behavior with what was observed — e.g. did the subject
+    /// behave differently when a chemical mark was in sensing range?
+    DecisionObservation {
+        subject_id: String,
+        tick: u64,
+        /// channel_name -> normalized value at decision time.
+        observations: Vec<(String, f32)>,
+    },
     /// World emitted events for one tick.
     WorldEvents { tick: u64, events: Vec<WorldEvent> },
     /// Resource consumption.

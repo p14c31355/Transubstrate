@@ -139,6 +139,12 @@ Last updated: 2026-10-11 (PR#52-#57 arc — memory ablation, signaling economics
   under the identical harness — post-migration behavior is model-dependent.
 - LLM integration (M7): granite4.1:3b-q4_K_M produced valid typed decisions
   in 80/80 cognition events on the reference GPU; zero schema rejections.
+- Chemical meaning formation (NEGATIVE): with marks logged and
+  observable (nearby_chemical_0), LLM observers sensed the gradient in
+  ~98% of decisions but their behavior was unchanged —
+  observer_awareness within ±0.008 across 5/5 seeds (granite 0.3,
+  4 ChemMarker + 2 LLM). Marks join SIGNAL in the sensed-but-ignored
+  category (chem-meaning-formation.md).
 - Observation adaptation speed (decision-stream lag+persistence): rule
   backend lag 0 stable (re-evaluates from observations); granite temp 0.3
   fresh sweep 5/5 displace ABSORB→SIGNAL (lag 0 ×4, 50 ×1), all persist;

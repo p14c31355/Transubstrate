@@ -99,10 +99,19 @@ the batch sweep runner all merged)
       decays (0.1/tick) and diffuses (0.05 to 4-neighbors) and has NO
       absorb payoff (meaning-free by construction; 3 new tests, 107 total)
       (docs/experiments/chemical-substrate.md).
-- [ ] Chemical-field meaning formation: with the substrate live, can a
-      population coordinate meaning onto chemical gradients? Detection
-      metric first (do subjects' RELEASE-channel-1 marks correlate with
-      later follower behavior?); LLM subjects see `chemical_0` today.
+- [x] Chemical-field meaning formation: detection instrument built —
+      `WorldEvent::ChemicalMarked` (every channel-1 mark logged),
+      `nearby_chemical_0` channel (4-neighbor gradient reach),
+      `DecisionObservation` (per-decision observation snapshot),
+      `ChemMarkerBackend` + `--markers N` mixed-population runs, and
+      `analyze-chem` (observation-based mark_awareness + writer-excluded
+      observer_awareness). Rule calibration true-negative; LLM seed 42:
+      observer_awareness −0.0004 ≈ 0 (sensed the gradient in 117/120
+      decisions, behavior unchanged) — NEGATIVE, supports the PR#58
+      hypothesis (no payoff coupling → no meaning formation). CONFIRMED
+      across 5/5 seeds (|observer_awareness| < 0.01; on-chem n≈354/360 —
+      marks are sensed but ignored)
+      (docs/experiments/chem-meaning-formation.md).
 - [x] Carrying capacity (primordial field): `--regen` flag added; at regen
       0.0005 the survivor count converges to 13-16 as the initial
       population grows 8→48 (deaths 0→35) — the field's supply sets the

@@ -34,6 +34,7 @@ kept, and nothing here claims emergence.
 | 24 | Reproduction under binding scarcity | docs/experiments/repro-scarcity.md | OBSERVED: threshold 6.0 → population doubles 8→16 and stabilizes AT the carrying capacity; 3.0-5.0 = over-reproduction collapse; mutation-floor fix was the precondition (fixed 20..100 clamp silently gated low-threshold lineages) |
 | 25 | Chemical substrate activated | docs/experiments/chemical-substrate.md | ENGINEERING: RELEASE channel 1 converts energy to chemical (no payoff, sense-only); decay + diffusion live; 3 tests — meaning-formation experiment now possible |
 | 26 | Observation adaptation | docs/experiments/observation-adaptation.md | lag+persistence decision-stream metric: rule lag 0 (stable), granite 0.3 2/5 lag 50-100 persist, temp 1.0 lag 0 (flail), qwen 1/5 non-persisting switch |
+| 27 | Chemical meaning formation | docs/experiments/chem-meaning-formation.md | NEGATIVE: detection instrument (marks logged, nearby_chemical_0, decision snapshots, analyze-chem) calibrated; LLM observers 5/5 seeds |awareness|<0.01 — sensed the gradient, ignored it; supports the no-payoff-coupling hypothesis |
 
 ## Running an experiment
 

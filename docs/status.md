@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-10-11 (PR#12 merged — selection measurement)
+Last updated: 2026-10-11 (PR#24 merged — memory_retention continuity dimension)
 
 ## What currently works (all OBSERVED, verified on this repository's CI + local runs)
 
@@ -53,9 +53,22 @@ Last updated: 2026-10-11 (PR#12 merged — selection measurement)
   mutation (drift +0.0006, below ±0.02 band); positive selection measured
   via direct phenotype competition (shareA 0.759, 5/5 seeds, mechanism
   confirmed). regen=0 → extinction.
-- **CLI**: `run-test`, `run-primordial`, `run-migration`, `replay`,
-  `verify`, `inspect`. Backends: echo, random, energy-rule,
-  reproducing-rule, `llm:<model>`.
+- **World migration (M9, PR#22–#24)**: second world (`network-v0`, ring
+  topology with per-node energy) behind the same WABIX trait;
+  `run-world-migration` runs subject → primordial half → network half with
+  carried energy; behavioral continuity + control comparison; event log +
+  manifest + replay all work for world migration runs.
+- **Per-subject bounded memory (M11, PR#17, #20, #23)**: memory limit 8
+  (FIFO), wired into the primordial population runner, the model-migration
+  harness, AND across the world-migration boundary — memory belongs to the
+  subject, not the backend or the world. LLM decisions receive the buffer.
+- **memory_retention continuity dimension (PR#24)**: fourth ContinuityVector
+  dimension — multiset match of (action, reward-bin) keys across the
+  migration boundary. Calibration: echo→echo 1.0, rule→echo 0.0,
+  consistent with the behavioral dimension.
+- **CLI**: `run-test`, `run-primordial`, `run-migration`, `run-world-migration`,
+  `benchmark`, `replay`, `verify`, `inspect`. Backends: echo, random,
+  energy-rule, reproducing-rule, `llm:<model>`.
 - **CI**: GitHub Actions — fmt, clippy -D warnings, tests, release build.
 
 ## What has been measured (CALIBRATION data, not findings about emergence)
@@ -69,6 +82,11 @@ Last updated: 2026-10-11 (PR#12 merged — selection measurement)
   max generation 2 in 2000 ticks; population cap enforced.
 - Migration harness calibration: echo→energy-rule gives behavioral continuity
   0.0 / effect −1.0; echo→echo gives continuity 1.0 / effect 0.0.
+- Memory-retention calibration (PR#24): echo→echo memory_retention 1.0
+  (matched 8/8); rule→echo 0.0 (matched 0/8) — the dimension tracks whether
+  remembered decisions/outcomes survive the swap.
+- World migration baseline (energy-rule, seed 42): behavioral continuity
+  0.0 (ABSORB pre → WAIT post), memory_retention 0.0 (matched 0/8).
 - Real LLM migration (M8): rule→LLM continuity 0.10 / effect −0.90 on 3/3
   seeds; LLM action window on seed 7: ABSORB 70, SIGNAL 2, WAIT 48.
 - LLM integration (M7): granite4.1:3b-q4_K_M produced valid typed decisions
@@ -82,12 +100,14 @@ Last updated: 2026-10-11 (PR#12 merged — selection measurement)
 - "Evolution" remains unclaimed: selection on one engineered trait
   (absorb_affinity) is now MEASURED (PR#12: share 0.759, 5/5 seeds), but no
   open-ended evolution, speciation, or niche formation has been tested.
-- No memory-retention continuity: the LLM path has no per-subject memory yet;
-  the M8 continuity measures behavioral distribution only.
-- No world migration (second world) yet.
+- No LLM-cognition world migration yet: the world-migration experiment has
+  run with rule controllers; the LLM path through a world change (and its
+  adaptation curve) is queued.
+- Memory retention is measured only by content match; no LLM run has yet
+  shown a subject USING retained memory after a swap.
 - No machine/process migration yet.
-- Multi-seed statistics exist only for the M8 migration (3 seeds); all other
-  experiments are single-seed observations.
+- Multi-seed statistics exist only for the M8 migration (3 seeds) and PR#12
+  competition (5 seeds); other experiments are single-seed observations.
 - The 3-seed agreement in M8 reflects temperature-0 prompting structure, not
   proven robustness across models or prompt variants.
 
@@ -97,10 +117,10 @@ Last updated: 2026-10-11 (PR#12 merged — selection measurement)
   document itself (open-ended evolution lit, sim-to-real, agent checkpoints).
 - Field-energy time series in regenerated population samples carries 0.0
   (SubjectState records don't include it; documented limitation).
-- Per-subject memory for the LLM path: next major work item (docs/next.md).
 
 ## Verification status
 
-- 74 unit tests passing; fmt + clippy -D warnings clean.
-- CI green on all merged PRs (#1–#12).
-- Real release-build CLI runs recorded in PR descriptions (#3, #4, #5, #8, #9, #11, #12).
+- 86 unit tests passing; fmt + clippy -D warnings clean.
+- CI green on all merged PRs (#1–#24).
+- Real release-build CLI runs recorded in PR descriptions (#3, #4, #5, #8,
+  #9, #11, #12, #22, #24).

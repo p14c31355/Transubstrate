@@ -11,15 +11,17 @@ scarcity/competition experiments merged)
 - [x] Per-subject memory in the primordial population runner: the bounded
       `memories` map is wired (PR#17) — LLM organisms reason over past
       decisions + reward signals.
-- [ ] Memory-retention continuity dimension: fingerprint memory state
-      before/after backend swap in the migration harness; add
-      `memory_retention` dimension to ContinuityVector.
+- [x] Memory-retention continuity dimension: `memory_retention` measures the
+      (action, reward-bin) content that survives a swap (PR#24); calibrated
+      echo→echo 1.0 / rule→echo 0.0.
 - [x] Migration harness carries the SAME memory buffer across the migration
       boundary (memory belongs to the subject, not the backend).
+- [x] World migration carries the SAME memory buffer across the world
+      boundary (PR#23).
 - [ ] LLM prompt already renders memory entries — verify end-to-end with
       granite4.1:3b-q4_K_M and record decision quality vs memory length.
 - [ ] Multi-seed statistics for the LLM migration effect (n>=5, report
-      mean ± sd; stop single-run anecdotes).
+      mean ± sd; stop single-run anecdotes), now across BOTH dimensions.
 
 ## 2. Research experiments
 
@@ -28,6 +30,9 @@ scarcity/competition experiments merged)
       longer runs, sharper fitness differential.
 - [x] Two-phenotype competition: POSITIVE selection measured — shareA 0.759
       mean, 5/5 seeds, mechanism confirmed (PR#12).
+- [ ] LLM world migration: subject migrates primordial → network with LLM
+      cognition; measure adaptation (action distribution shift) and the
+      memory_retention dimension against a same-world control.
 - [ ] Signaling-convention detection: with signal cost > 0, do organisms
       that signal near resource acquire followers? Define detection metric
       before running.
@@ -39,11 +44,16 @@ scarcity/competition experiments merged)
 
 ## 3. M9 continuation — world migration experiments
 
-- [ ] World-migration experiment with LLM cognition: subject migrates
-      primordial → network mid-run; measure adaptation (action distribution
-      shift) and continuity against a same-world control.
+- [x] World-migration experiment runnable end-to-end (`run-world-migration`),
+      with event log, manifest, replay, and tests (PR#22).
+- [ ] LLM world migration: subject migrates primordial → network with LLM
+      cognition; measure adaptation (action distribution shift) and the
+      memory_retention dimension against a same-world control.
 - [ ] Observation-adaptation metric: how quickly does behavior adapt to the
       new manifest's channel names (node_energy vs local_energy)?
+- [ ] WorldMigrationResult is currently unused by the CLI (it returns only
+      the ContinuityVector) — expose pre/post fingerprints or delete the
+      dead struct.
 
 ## 4. Infrastructure
 

@@ -27,6 +27,7 @@ kept, and nothing here claims emergence.
 | 18 | Cross-model outcome learning (qwen, signal pull) | docs/experiments/cross-model-outcome-learning.md | OBSERVED (4/4 complete runs mix SIGNAL+HOP post-swap with no channel meaning; 1 death/run — aggressive exploration measured) |
 | 18 | Signaling-follower detection (multi-subject) | docs/experiments/signaling-followers.md | OBSERVED mixed (attraction 5/5 and intake ~2.1x vs null; survival economics fail under current params — negative result disclosed) |
 | 19 | Memory ablation (causal carry-vs-wipe) | docs/experiments/memory-ablation.md | OBSERVED: rule calibration 0.0 (true negative); LLM n=5 behavioral +0.50 / retention +0.55 / usage +0.80 — with disclosed pre-phase confound |
+| 20 | LLM follower in the signaling world | docs/experiments/llm-signaling.md | OBSERVED n=3: null-signal (strength 0) is the LLM's cheap safe action; seed 99 sent real signals AND converged on the emitter (proximity 1.0); 3/3 survive |
 
 ## Running an experiment
 

@@ -169,6 +169,7 @@ impl SubjectRunner {
                     params: vec![],
                 }),
                 reward_signal: 0.0, // wired to world feedback in M3+
+                pre_tick_energy: subject_ref.energy,
             });
         }
 

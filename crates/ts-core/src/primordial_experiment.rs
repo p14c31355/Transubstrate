@@ -309,6 +309,7 @@ pub fn run_primordial(
                             params: vec![],
                         }),
                         reward_signal: 0.0, // reward wiring below (post-tick)
+                        pre_tick_energy: sref.energy,
                     });
                 }
                 if let Some(action) = decision.action {

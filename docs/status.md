@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-10-11 (PR#28 merged — world-migration A/B control + effect)
+Last updated: 2026-10-11 (PR#37 merged — outcome-driven exploration observed)
 
 ## What currently works (all OBSERVED, verified on this repository's CI + local runs)
 
@@ -95,7 +95,16 @@ Last updated: 2026-10-11 (PR#28 merged — world-migration A/B control + effect)
   conservative WAIT policy is swap-robust; swap-fragile vs swap-robust
   cognition is now a measured distinction.
 - Real LLM migration (M8): rule→LLM continuity 0.10 / effect −0.90 on 3/3
-  seeds; LLM action window on seed 7: ABSORB 70, SIGNAL 2, WAIT 48.
+  seeds; superseded by the 5-seed stats (behavioral 0.75±0) after memory
+  context entered the prompt — prompt-sensitivity, not robustness
+  (llm-model-migration-stats.md).
+- Outcome-driven exploration (PR#37, temp 0.7, n=5): 2/5 seeds discovered
+  and repeated SIGNAL from outcome-visible memory ("Repeat successful
+  SIGNAL from past ticks"); seed 2026 adapted post-swap (ABSORB 38 →
+  SIGNAL 23). First OBSERVED experience-driven action learning without
+  human-assigned channel meaning. High variance: 2/5 deaths.
+- Cross-model (PR#35): qwen3.5:2b-q4_K_M behavioral 0.00 vs granite 0.75
+  under the identical harness — post-migration behavior is model-dependent.
 - LLM integration (M7): granite4.1:3b-q4_K_M produced valid typed decisions
   in 80/80 cognition events on the reference GPU; zero schema rejections.
 
@@ -107,15 +116,21 @@ Last updated: 2026-10-11 (PR#28 merged — world-migration A/B control + effect)
 - "Evolution" remains unclaimed: selection on one engineered trait
   (absorb_affinity) is now MEASURED (PR#12: share 0.759, 5/5 seeds), but no
   open-ended evolution, speciation, or niche formation has been tested.
-- No LLM-cognition world migration yet: the world-migration experiment has
-  run with rule controllers; the LLM path through a world change (and its
-  adaptation curve) is queued.
-- Memory retention is measured only by content match; no LLM run has yet
-  shown a subject USING retained memory after a swap.
+- No signaling CONVENTION (multi-subject, stable) has formed or been
+  detected: single-subject experience-driven SIGNAL learning is OBSERVED
+  (PR#37), but no experiment has yet tested whether a convention forms
+  across subjects or survives individuals.
+- LLM world migration exists (PR#26, #28) but the swap did not perturb the
+  LLM subject (effect ±0.0); adaptation to a world change is OBSERVED only
+  via outcome learning at temp 0.7 (PR#37), not via manifest-channel
+  adaptation.
+- Memory USE after a swap is OBSERVED at temp 0.7 (learning loop) but not
+  yet at temperature 0, and not yet tied to the memory_retention dimension
+  (FIFO roll-off masks it).
 - No machine/process migration yet.
-- Multi-seed statistics exist for the rule→LLM migration (5 seeds, PR#26
-  record and llm-model-migration-stats.md), PR#12 competition (5 seeds), and
-  the LLM world migration (5 seeds); other experiments are single-seed
+- Multi-seed statistics exist for the rule→LLM migration (5 seeds),
+  PR#12 competition (5 seeds), the LLM world migration (5 seeds), and
+  outcome exploration (5 seeds); other experiments are single-seed
   observations.
 - The temperature-0 seed agreement is prompting structure, not cross-model
   invariance: qwen3.5:2b-q4_K_M diverges from granite4.1 (behavioral 0.00 vs

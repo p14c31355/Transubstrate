@@ -93,24 +93,14 @@ All notable changes to Transubstrate are documented here.
   ~84k (32 orgs), mock decisions ~5.8M/s, peak host RAM ~3.4 MiB,
   ~315KB log per 1000 ticks (8 orgs)
 
-### Added (feat/migration-memory, unmerged)
+### Added (PR#20, merged)
 - Migration harness now carries per-subject bounded memory ACROSS the
   migration boundary (memory belongs to the subject, not the backend)
 - MemoryEntry.pre_tick_energy: reward = post-tick energy − pre-decision
   energy; shared record_memory() helper (FIFO limit param)
 - Primordial experiment runner also records pre_tick_energy
 
-### Added (research/active-network, unmerged)
-- NetworkWorld: signal-driven energy pull — a signaling node draws
-  `signal_pull_rate * strength` energy per tick from its ring neighbors
-  (energy-conserving). SIGNAL now has a real resource payoff and HOP gets
-  a reason to chase signal-rich nodes; this makes adaptation (action
-  distribution shift across a world migration) measurable instead of
-  masked by a passive WAIT-optimal surface.
-- Tests: pull concentrates energy on the signaling node and conserves
-  totals; pull stops after field decay.
-
-### Added (research/active-network, unmerged)
+### Added (PR#30-#33, merged)
 - NetworkWorld: signal-driven energy pull — a signaling node draws
   `signal_pull_rate * strength` energy per tick from each ring neighbor
   (energy-conserving, applied before field decay). SIGNAL now has a real

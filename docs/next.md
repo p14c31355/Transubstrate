@@ -3,32 +3,26 @@
 Practical continuation queue. Each item is sized for one branch/PR.
 Order reflects current value assessment; revisit after each merge.
 
-Last updated: 2026-10-11 (after PR#19 — M0-M11, M9, M10, M11 all merged;
-scarcity/competition experiments merged)
+Last updated: 2026-10-11 (after PR#37 — M0-M11, M9, M10, M11 all merged;
+world-migration A/B, cross-model stats, signal pull, and outcome-driven
+exploration recorded)
 
-## 1. M11 continuation — memory retention continuity (highest value)
+## 1. Experience-driven continuity (highest value)
 
-- [x] Per-subject memory in the primordial population runner: the bounded
-      `memories` map is wired (PR#17) — LLM organisms reason over past
-      decisions + reward signals.
-- [x] Memory-retention continuity dimension: `memory_retention` measures the
-      (action, reward-bin) content that survives a swap (PR#24); calibrated
-      echo→echo 1.0 / rule→echo 0.0.
-- [x] Migration harness carries the SAME memory buffer across the migration
-      boundary (memory belongs to the subject, not the backend).
-- [x] World migration carries the SAME memory buffer across the world
-      boundary (PR#23).
-- [ ] LLM prompt already renders memory entries — verify end-to-end with
-      granite4.1:3b-q4_K_M and record decision quality vs memory length.
-- [x] Multi-seed statistics for the LLM migration effect (n=5: behavioral
-      0.75±0, memory_retention 0.0±0, effect −0.25±0) — recorded in
-      docs/experiments/llm-model-migration-stats.md. memory_retention 0.0 is
-      a FIFO roll-off artifact (40 decisions/phase vs limit 8); a
-      boundary-anchored sampling is the design follow-up.
-- [x] Second model for cross-model robustness: qwen3.5:2b-q4_K_M breaks the
-      temperature-0 tie — behavioral 0.00 vs granite's 0.75 under the
-      identical harness (docs/experiments/cross-model-migration.md). Post-
-      migration behavior is model-dependent, as SUBJECT != MODEL predicts.
+- [x] Outcome-visible memory: LLM prompt renders past decisions WITH their
+      observed outcomes (PR#36); leakage test passes.
+- [x] Outcome-driven exploration: at temperature 0.7 the LLM discovers and
+      repeats SIGNAL from outcome evidence ("Repeat successful SIGNAL from
+      past ticks"); 1/5 seeds adapted post-swap (PR#37,
+      docs/experiments/outcome-exploration.md).
+- [ ] Multi-seed outcome-learning statistics: learning incidence, post-swap
+      adaptation rate, and death rate as a function of temperature
+      (0.3/0.7/1.0 × n>=5). Requires batch-runner support or scripted seeds.
+- [ ] Boundary-anchored memory sampling: memory_retention 0.0 is currently a
+      FIFO roll-off artifact (40 decisions/phase vs limit 8); sample the
+      buffer AT the boundary to make the dimension discriminating.
+- [ ] Cross-model outcome learning: does qwen3.5 (thinking-style, reasoning
+      off) also learn SIGNAL from outcomes at temp>0?
 
 ## 2. Research experiments
 
@@ -37,48 +31,44 @@ scarcity/competition experiments merged)
       longer runs, sharper fitness differential.
 - [x] Two-phenotype competition: POSITIVE selection measured — shareA 0.759
       mean, 5/5 seeds, mechanism confirmed (PR#12).
-- [ ] LLM world migration: subject migrates primordial → network with LLM
-      cognition; measure adaptation (action distribution shift) and the
-      memory_retention dimension against a same-world control.
-- [ ] Signaling-convention detection: with signal cost > 0, do organisms
-      that signal near resource acquire followers? Define detection metric
-      before running.
+- [x] Signal-driven energy pull: SIGNAL now has a resource payoff;
+      signal-seeker flips SIGNAL→ABSORB across the boundary (PR#30–#33,
+      docs/experiments/signal-pull.md).
+- [ ] Signaling-convention detection (multi-subject): with signal pull,
+      do OTHER subjects flock to/harvest at another's signal? Define the
+      detection metric before running; single-subject learning is already
+      OBSERVED (PR#37).
 - [ ] Chemical-field meaning formation (the semantics-free substrate is
-      currently unused by controllers).
+      still unused by controllers).
 - [ ] Carrying capacity: tune regen vs consumption so the field actually
       binds (currently regen dominates at 0.01/cell/tick); rerun
       reproduction experiments under binding scarcity.
 
-## 3. M9 continuation — world migration experiments
+## 3. M9 continuation — world migration
 
-- [x] World-migration experiment runnable end-to-end (`run-world-migration`),
-      with event log, manifest, replay, and tests (PR#22).
-- [x] Same-world control + per-dimension effect vector (PR#28): measured
-      energy-rule effect −1.0/−1.0, LLM effect ±0.0; record updated with the
-      control (docs/experiments/llm-world-migration.md).
-- [ ] A decision surface that rewards SIGNAL/MOVE: the network world is too
-      passive to separate adaptation from conservatism (both worlds favor
-      WAIT for the current LLM prompt). Needed before an adaptation metric
-      is meaningful.
+- [x] Runnable end-to-end with control + effect vector (PR#22, #28).
 - [ ] Observation-adaptation metric: how quickly does behavior adapt to the
-      new manifest's channel names (node_energy vs local_energy)?
+      new manifest's channel names (node_energy vs local_energy)? Needs the
+      active decision surface above.
+- [ ] Multi-subject world migration: currently single-subject; migrate a
+      population and measure per-subject continuity spread.
 
 ## 4. Infrastructure
 
+- [ ] Batch/seed-sweep runner: `run-migration --seeds 1,7,42,...` emitting a
+      summary CSV/JSON so multi-seed statistics stop being hand-collected.
 - [ ] Emit ExperimentManifest automatically next to every event log for
       the migration and scarcity harnesses (test/primordial already emit;
       migration/scarcity emission verified wired — verify with a fresh run).
 - [ ] Regenerate population samples with real field_energy (extend
       SubjectState POPULATION payload).
-- [ ] Consider `worlds/` + `experiments/` layout split only when crate
-      boundaries actually demand it (avoid directory theater).
 
 ## 5. M10 expansion
 
+- [x] LLM cognition throughput section in the benchmark (PR#31,
+      `TS_BENCH_LLM_MODEL` gate; 3.29 decisions/s on the reference GPU).
 - [ ] Record endpoint model metadata (VRAM footprint) in the benchmark
       report when the endpoint exposes it.
-- [ ] Cognition throughput for the LLM backend (decisions/sec, tokens/sec)
-      as a benchmark section.
 
 ## Explicitly deferred (do not start without revisiting)
 

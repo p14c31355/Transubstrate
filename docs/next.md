@@ -3,9 +3,9 @@
 Practical continuation queue. Each item is sized for one branch/PR.
 Order reflects current value assessment; revisit after each merge.
 
-Last updated: 2026-10-11 (after PR#37 — M0-M11, M9, M10, M11 all merged;
-world-migration A/B, cross-model stats, signal pull, and outcome-driven
-exploration recorded)
+Last updated: 2026-10-11 (after PR#46 — world-migration A/B, cross-model
+stats, signal pull, outcome learning, temperature sweep, memory_usage, and
+the batch sweep runner all merged)
 
 ## 1. Experience-driven continuity (highest value)
 
@@ -44,12 +44,14 @@ exploration recorded)
 - [x] Signal-driven energy pull: SIGNAL now has a resource payoff;
       signal-seeker flips SIGNAL→ABSORB across the boundary (PR#30–#33,
       docs/experiments/signal-pull.md).
-        for i in 0..config.followers {
-            let sid = format!("follower-{i:02}");
-            if let Some(s) = world.subject(&sid) {
-                actions.push((sid.clone(), follower_action(&mut world, &sid, s.energy)));
-            }
-        }
+- [x] Signaling-follower detection (multi-subject): attraction 5/5 seeds and
+      ~2.1× intake vs null — the pull mechanism creates the follower-payoff
+      substrate; survival economics fail under current parameters (all
+      followers die in 600 ticks) — negative result disclosed
+      (docs/experiments/signaling-followers.md).
+- [ ] Survival-tuned follower run: higher follower start energy / stronger
+      pull / neighbor-node harvesting so followers outlive one ring circuit;
+      then a multi-subject LLM signaling run.
 - [ ] Chemical-field meaning formation (the semantics-free substrate is
       still unused by controllers).
 - [ ] Carrying capacity: tune regen vs consumption so the field actually
@@ -67,8 +69,9 @@ exploration recorded)
 
 ## 4. Infrastructure
 
-- [ ] Batch/seed-sweep runner: `run-migration --seeds 1,7,42,...` emitting a
-      summary CSV/JSON so multi-seed statistics stop being hand-collected.
+- [x] Batch/seed-sweep runner: `sweep-world-migration --seeds 1,7,42,...`
+      emits a mean ± sd JSON summary per dimension (PR#39). CSV output and a
+      run-migration sweep remain open.
 - [ ] Emit ExperimentManifest automatically next to every event log for
       the migration and scarcity harnesses (test/primordial already emit;
       migration/scarcity emission verified wired — verify with a fresh run).

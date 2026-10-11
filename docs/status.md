@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-10-11 (PR#45-#47 arc — LLM memory_usage numbers recorded)
+Last updated: 2026-10-11 (PR#52-#57 arc — memory ablation, signaling economics, cognitive subjects in the signaling world)
 
 ## What currently works (all OBSERVED, verified on this repository's CI + local runs)
 
@@ -71,12 +71,28 @@ Last updated: 2026-10-11 (PR#45-#47 arc — LLM memory_usage numbers recorded)
   post-swap, immune to FIFO roll-off. Wired into BOTH harnesses; world-
   migration calibration: signal-seeker usage 0.5 (SIGNAL→ABSORB strategy
   flip re-enacted half its boundary memory), control 1.0, effect −0.5.
-- **Memory ablation — causal carry-vs-wipe (PR#52 arc)**: `memory_carry:
+- **Memory ablation — causal carry-vs-wipe (PR#52, #53)**: `memory_carry:
   bool` in both migration configs + boundary wipe + per-seed ablation arm
-  (`--no-memory` CLI; `ablation_effect` in sweep JSON). Calibration:
-  rule→echo ablation effect 0.0 across all dimensions — rule backends do
-  not read memory, a true negative (no detector artifact). LLM carry-vs-
-  wipe comparison recorded in docs/experiments/memory-ablation.md.
+  (`--no-memory` CLI; `ablation_effect` in sweep JSON). Rule calibration
+  0.0 (true negative). Same-trajectory refinement: the wipe arm REPLAYS
+  the carry arm's pre-swap decisions — 5/5 seeds pre-phase exactly
+  matched; LLM n=5: behavioral +0.68, retention +0.60, usage +1.00; wipe
+  arms jump to uniform SIGNAL saturation — memory causally shapes
+  post-swap strategy (docs/experiments/memory-ablation.md).
+- **Signaling world economics (PR#54, #55)**: survival-tuned budget (40
+  units) — 5/6 followers survive 600 ticks in 5/5 seeds, intake ~2.6×
+  null; gradient channels (`nearby_signal_left`/`right`) — followers
+  converge on the emitter (proximity 0.98+); EMERGENT carrying capacity
+  (2/6 survive at the beacon — node capacity caps co-residency, a
+  population cap from economics, not an imposed rule)
+  (docs/experiments/signaling-followers.md).
+- **Cognitive subjects in the signaling world (PR#56, #57)**: single LLM
+  follower (granite, n=3) — 3/3 survive, NULL-SIGNAL discovery (SIGNAL
+  strength 0.0 is the LLM's cheap safe action); seed 99 sent real signals
+  and converged on the emitter. Two-LLM convention run — NEGATIVE
+  (disclosed): both converge on null-signal, no interaction, rule
+  emitter's signal ignored at temp 0.3
+  (docs/experiments/llm-signaling.md, convention-formation.md).
 - **CLI**: `run-test`, `run-primordial`, `run-migration`, `run-world-migration`,
   `sweep-world-migration`, `run-signaling`, `benchmark`, `replay`, `verify`,
   `inspect`. Backends: echo, random, energy-rule, reproducing-rule,

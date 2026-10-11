@@ -61,5 +61,35 @@ signal detected." → "Energy high, no signals to absorb.").
 - The network world's decision surface may be too passive (only WAIT/ABSORB
   were ever attractive); a world that rewards SIGNAL/MOVE would discriminate
   adaptation better.
-- No same-world control for the LLM was run for this record (the rule
-  baseline plays the contrast role); queued in docs/next.md.
+- ~~No same-world control for the LLM was run for this record~~ RESOLVED
+  (PR#28): a same-seed, same-backend control that never leaves the origin
+  world now ships with the harness.
+
+## SAME-WORLD CONTROL (added by PR#28)
+
+`run-world-migration` now runs the migration run AND a same-seed control
+that stays in the primordial world the whole time, reporting a per-dimension
+effect (migration − control). Seed 42, same model:
+
+| dimension | migration | control | effect |
+|-----------|-----------|---------|--------|
+| behavioral_action_distribution | 0.975 | 0.975 | ±0.000 |
+| memory_retention | 1.000 | 1.000 | ±0.000 |
+
+The control also scores 0.975/1.0 — the LLM's mid-run behavior would look
+the same WITHOUT any world swap. Effect ±0.0 confirms the interpretation
+above quantitatively: the swap itself did nothing measurable to this
+subject's behavior; the near-identical pre/post fingerprints are a property
+of the conservative policy, not of the migration.
+
+Contrast (energy-rule, seed 42, same harness): migration 0.0/0.0, control
+1.0/1.0 → effect −1.0/−1.0 — the swap genuinely breaks the rule subject
+while leaving an uninterrupted run intact. The measurement discriminates
+between "swap-robust" (LLM) and "swap-fragile" (rule) cognition.
+
+## FOLLOW-UP QUEUED
+
+- A decision surface that rewards SIGNAL/MOVE so adaptation can separate
+  from conservatism.
+- Multi-seed effect statistics (the effect is now the right statistic to
+  aggregate) and a second model to break the temperature-0 tie.

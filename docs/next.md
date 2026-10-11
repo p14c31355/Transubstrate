@@ -46,14 +46,15 @@ scarcity/competition experiments merged)
 
 - [x] World-migration experiment runnable end-to-end (`run-world-migration`),
       with event log, manifest, replay, and tests (PR#22).
-- [ ] LLM world migration: subject migrates primordial → network with LLM
-      cognition; measure adaptation (action distribution shift) and the
-      memory_retention dimension against a same-world control.
+- [x] Same-world control + per-dimension effect vector (PR#28): measured
+      energy-rule effect −1.0/−1.0, LLM effect ±0.0; record updated with the
+      control (docs/experiments/llm-world-migration.md).
+- [ ] A decision surface that rewards SIGNAL/MOVE: the network world is too
+      passive to separate adaptation from conservatism (both worlds favor
+      WAIT for the current LLM prompt). Needed before an adaptation metric
+      is meaningful.
 - [ ] Observation-adaptation metric: how quickly does behavior adapt to the
       new manifest's channel names (node_energy vs local_energy)?
-- [ ] WorldMigrationResult is currently unused by the CLI (it returns only
-      the ContinuityVector) — expose pre/post fingerprints or delete the
-      dead struct.
 
 ## 4. Infrastructure
 

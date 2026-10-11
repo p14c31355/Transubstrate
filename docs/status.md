@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-10-11 (PR#24 merged — memory_retention continuity dimension)
+Last updated: 2026-10-11 (PR#28 merged — world-migration A/B control + effect)
 
 ## What currently works (all OBSERVED, verified on this repository's CI + local runs)
 
@@ -53,11 +53,13 @@ Last updated: 2026-10-11 (PR#24 merged — memory_retention continuity dimension
   mutation (drift +0.0006, below ±0.02 band); positive selection measured
   via direct phenotype competition (shareA 0.759, 5/5 seeds, mechanism
   confirmed). regen=0 → extinction.
-- **World migration (M9, PR#22–#24)**: second world (`network-v0`, ring
+- **World migration (M9, PR#22–#24, #28)**: second world (`network-v0`, ring
   topology with per-node energy) behind the same WABIX trait;
   `run-world-migration` runs subject → primordial half → network half with
-  carried energy; behavioral continuity + control comparison; event log +
-  manifest + replay all work for world migration runs.
+  carried energy, PLUS a same-seed no-swap control and a per-dimension
+  effect vector (migration − control). Event log + manifest + replay all
+  work for both runs. Measured: energy-rule effect −1.0/−1.0 (swap-fragile),
+  LLM effect ±0.0 (swap-robust because conservative).
 - **Per-subject bounded memory (M11, PR#17, #20, #23)**: memory limit 8
   (FIFO), wired into the primordial population runner, the model-migration
   harness, AND across the world-migration boundary — memory belongs to the
@@ -87,6 +89,11 @@ Last updated: 2026-10-11 (PR#24 merged — memory_retention continuity dimension
   remembered decisions/outcomes survive the swap.
 - World migration baseline (energy-rule, seed 42): behavioral continuity
   0.0 (ABSORB pre → WAIT post), memory_retention 0.0 (matched 0/8).
+- World migration with same-world control (PR#28): energy-rule effect
+  −1.0/−1.0 (the swap breaks the rule subject; the control run stays at
+  1.0/1.0). LLM (granite4.1:3b-q4_K_M, seed 42) effect ±0.0/±0.0 — the
+  conservative WAIT policy is swap-robust; swap-fragile vs swap-robust
+  cognition is now a measured distinction.
 - Real LLM migration (M8): rule→LLM continuity 0.10 / effect −0.90 on 3/3
   seeds; LLM action window on seed 7: ABSORB 70, SIGNAL 2, WAIT 48.
 - LLM integration (M7): granite4.1:3b-q4_K_M produced valid typed decisions

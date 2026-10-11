@@ -120,6 +120,12 @@ pub fn run_world_migration(
 
     let mut backend = config.backend.instantiate();
 
+    // Per-subject bounded memory persists ACROSS the world boundary —
+    // memory belongs to the subject, not the world or the backend
+    // (SUBJECT != MODEL, same treatment as the model-migration harness).
+    let mut memory: Vec<crate::cognition::MemoryEntry> = Vec::new();
+    const MEMORY_LIMIT: usize = 8;
+
     let mut pre_collector = ActionCollector::new();
     for local in 0..half {
         let tick = local;
@@ -140,7 +146,7 @@ pub fn run_world_migration(
                 energy: sref.energy,
                 observations,
                 manifest: origin.manifest().clone(),
-                memory: vec![],
+                memory: memory.clone(),
             };
             let decision = backend.decide(&ctx)?;
             crate::cognition::validate_decision(origin.manifest(), &decision)?;
@@ -160,9 +166,17 @@ pub fn run_world_migration(
             });
             if let Some(action) = decision.action {
                 pre_collector.record(Some(&action.name));
-                actions.push((sid_str.clone(), action));
+                actions.push((sid_str.clone(), action.clone()));
+                crate::cognition::record_memory(
+                    &mut memory,
+                    tick,
+                    Some(&action),
+                    sref.energy,
+                    MEMORY_LIMIT,
+                );
             } else {
                 pre_collector.record(None);
+                crate::cognition::record_memory(&mut memory, tick, None, sref.energy, MEMORY_LIMIT);
             }
         }
         let world_events = origin.tick(&actions);
@@ -173,6 +187,14 @@ pub fn run_world_migration(
         if let Some(org) = origin.organism(&sid_str) {
             sref.pos = org.pos;
             sref.energy = org.energy;
+        }
+        // Reward wiring: energy delta from pre-decision energy.
+        let reward = memory
+            .last_mut()
+            .filter(|m| m.reward_signal == 0.0)
+            .zip(origin.organism(&sid_str));
+        if let Some((last, org)) = reward {
+            last.reward_signal = org.energy - last.pre_tick_energy_hint();
         }
     }
 
@@ -224,7 +246,7 @@ pub fn run_world_migration(
                 energy,
                 observations,
                 manifest: network.manifest().clone(),
-                memory: vec![],
+                memory: memory.clone(),
             };
             let decision = backend.decide(&ctx)?;
             crate::cognition::validate_decision(network.manifest(), &decision)?;
@@ -244,9 +266,17 @@ pub fn run_world_migration(
             });
             if let Some(action) = decision.action {
                 post_collector.record(Some(&action.name));
-                actions.push((sid_str.clone(), action));
+                actions.push((sid_str.clone(), action.clone()));
+                crate::cognition::record_memory(
+                    &mut memory,
+                    tick,
+                    Some(&action),
+                    energy,
+                    MEMORY_LIMIT,
+                );
             } else {
                 post_collector.record(None);
+                crate::cognition::record_memory(&mut memory, tick, None, energy, MEMORY_LIMIT);
             }
         }
         let world_events = network.tick(&actions);
@@ -254,6 +284,14 @@ pub fn run_world_migration(
             tick,
             events: world_events,
         });
+        // Reward wiring: energy delta from pre-decision energy.
+        let reward = memory
+            .last_mut()
+            .filter(|m| m.reward_signal == 0.0)
+            .zip(network.subject(&sid_str));
+        if let Some((last, sub)) = reward {
+            last.reward_signal = sub.energy - last.pre_tick_energy_hint();
+        }
     }
 
     log.push(EventPayload::ExperimentFinished {
@@ -311,5 +349,38 @@ mod tests {
             (v1 - v2).abs() < 1e-6,
             "same seed must give same continuity"
         );
+    }
+
+    #[test]
+    fn world_migration_carries_memory_across_boundary() {
+        // Memory belongs to the subject, not the world: entries recorded in
+        // the origin world must still be in the buffer when the destination
+        // world's decisions run, and each entry must get its reward wired.
+        let dir = std::env::temp_dir().join(format!("ts-wmig-mem-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let cfg = WorldMigrationConfig {
+            backend: crate::primordial_experiment::BackendKind::Echo,
+            ..WorldMigrationConfig::default()
+        };
+        let _ = run_world_migration(&cfg, &dir.join("events.jsonl")).unwrap();
+        let records = crate::event_log::read_log(&dir.join("events.jsonl")).unwrap();
+        let decisions: Vec<_> = records
+            .iter()
+            .filter_map(|r| match &r.payload {
+                EventPayload::DecisionMade { tick, .. } => Some(*tick),
+                _ => None,
+            })
+            .collect();
+        // Decisions must exist on BOTH sides of the midpoint migration.
+        let half = cfg.ticks / 2;
+        assert!(
+            decisions.iter().any(|t| *t < half),
+            "pre-migration decisions missing"
+        );
+        assert!(
+            decisions.iter().any(|t| *t >= half),
+            "post-migration decisions missing"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

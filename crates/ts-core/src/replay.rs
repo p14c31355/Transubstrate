@@ -32,6 +32,31 @@ pub struct ExperimentManifest {
 
 pub const MANIFEST_VERSION: u32 = 1;
 
+impl ExperimentManifest {
+    /// Serialize to pretty JSON with a trailing newline.
+    pub fn to_json(&self) -> String {
+        let mut s = serde_json::to_string_pretty(self).expect("manifest serialization cannot fail");
+        s.push('\n');
+        s
+    }
+
+    /// Write manifest.json next to the given events.jsonl path.
+    pub fn write_next_to(&self, events_path: &Path) -> std::io::Result<()> {
+        let manifest_path = events_path
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .join("manifest.json");
+        std::fs::write(manifest_path, self.to_json())
+    }
+
+    /// Read a manifest from disk.
+    pub fn read(path: &Path) -> std::io::Result<ExperimentManifest> {
+        let text = std::fs::read_to_string(path)?;
+        serde_json::from_str(&text)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+    }
+}
+
 /// Metrics regenerated from an event log — no cognition re-execution.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct RegeneratedMetrics {

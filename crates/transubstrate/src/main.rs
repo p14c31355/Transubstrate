@@ -111,6 +111,22 @@ enum Commands {
         #[arg(long)]
         out: Option<PathBuf>,
     },
+    /// Run the world-migration experiment: primordial → network (M9).
+    RunWorldMigration {
+        #[arg(long, default_value_t = 400)]
+        ticks: u64,
+        #[arg(long, default_value_t = 5)]
+        cognition_interval: u64,
+        /// Cognition backend: echo | random | energy-rule
+        #[arg(long, default_value = "energy-rule")]
+        backend: String,
+        #[arg(long, default_value_t = 42)]
+        seed: u64,
+        #[arg(long, default_value_t = 20.0)]
+        energy: f32,
+        #[arg(long, default_value = "runs")]
+        out: PathBuf,
+    },
     /// Regenerate metrics from an event log without re-running cognition (M6).
     Replay {
         /// Path to the events.jsonl file.
@@ -534,6 +550,53 @@ fn main() {
                 }
                 let _ = std::fs::write(&path, format!("{json}\n"));
                 println!("report written: {}", path.display());
+            }
+        }
+        Commands::RunWorldMigration {
+            ticks,
+            cognition_interval,
+            backend,
+            seed,
+            energy,
+            out,
+        } => {
+            let backend_kind = match parse_any_backend(&backend, seed) {
+                Ok(b) => b,
+                Err(e) => {
+                    eprintln!("{e}");
+                    std::process::exit(2);
+                }
+            };
+            let config = ts_core::world_migration::WorldMigrationConfig {
+                experiment_id: ExperimentId::generate(),
+                world: Default::default(),
+                world_seed: seed,
+                ticks,
+                cognition_interval,
+                start_energy: energy,
+                backend: backend_kind,
+                network: Default::default(),
+            };
+            let id = config.experiment_id.to_string();
+            let log_path = out.join(&id).join("events.jsonl");
+            match ts_core::world_migration::run_world_migration(&config, &log_path) {
+                Ok(vector) => {
+                    println!("experiment: {}", config.experiment_id);
+                    println!("backend:    {backend}");
+                    println!("ticks:      {ticks}");
+                    for d in &vector.dimensions {
+                        println!("continuity {}: {:.4}", d.name, d.value);
+                        println!("  computation: {}", d.computation);
+                    }
+                    if let Some(mid) = &vector.migration_id {
+                        println!("migration id: {mid}");
+                    }
+                    println!("event log: {}", log_path.display());
+                }
+                Err(e) => {
+                    eprintln!("experiment failed: {e}");
+                    std::process::exit(1);
+                }
             }
         }
         Commands::Replay { path } => match ts_core::replay::regenerate_metrics(&path) {

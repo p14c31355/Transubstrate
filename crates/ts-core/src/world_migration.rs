@@ -10,15 +10,15 @@
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
-use crate::cognition::{CognitionBackend, CognitionError, DecisionContext};
+use crate::cognition::{CognitionError, DecisionContext};
 use crate::continuity::{ActionCollector, ContinuityVector, MigrationEvent};
 use crate::event_log::{EventLog, EventPayload};
-use crate::ids::ExperimentId;
-use crate::network_world::{NetworkConfig, NetworkWorld, NETWORK_WORLD_IMPLEMENTATION};
+use crate::ids::{ExperimentId, SubjectId};
+use crate::network_world::{NETWORK_WORLD_IMPLEMENTATION, NetworkWorld};
 use crate::primordial::{PrimordialConfig, PrimordialWorld, WORLD_IMPLEMENTATION};
 use crate::resource::ResourceLedger;
 use crate::runtime::CognitionCadence;
-use crate::wabix::{SubjectRef, World};
+use crate::wabix::{Action, SubjectRef, World};
 
 /// Configuration for a world-migration experiment.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -97,8 +97,6 @@ pub fn run_world_migration(
     let half = config.ticks / 2;
     let cadence = CognitionCadence::every(config.cognition_interval);
     let mut ledger = ResourceLedger::new(4096);
-    let mut collector_pre = ActionCollector::new();
-    let mut collector_post = ActionCollector::new();
 
     // ---- Origin world: primordial, first half ----
     let sid = SubjectId::from_static("world-migrant");
@@ -126,47 +124,52 @@ pub fn run_world_migration(
     for local in 0..half {
         let tick = local;
         let mut actions: Vec<(String, Action)> = Vec::new();
-        if cadence.fires_on(tick) {
-            if let Some(org) = origin.organism(&sid_str) {
-                sref.pos = org.pos;
-                sref.energy = org.energy;
-                let observations = origin.observe(&sref).map_err(|e| {
-                    CognitionError::Unavailable(format!("observe failed: {e}"))
-                })?;
-                let ctx = DecisionContext {
-                    subject_id: sid_str.clone(),
-                    tick,
-                    energy: sref.energy,
-                    observations,
-                    manifest: origin.manifest().clone(),
-                    memory: vec![],
-                };
-                let decision = backend.decide(&ctx)?;
-                crate::cognition::validate_decision(origin.manifest(), &decision)?;
-                crate::cognition::charge_cognition(
-                    &mut ledger,
-                    tick,
-                    &crate::cognition::CognitionCost {
-                        cognition_events: 1,
-                        tokens: 0,
-                    },
-                    &sid_str,
-                );
-                log.push(EventPayload::DecisionMade {
-                    subject_id: sid_str.clone(),
-                    tick,
-                    decision: decision.clone(),
-                });
-                if let Some(action) = decision.action {
-                    pre_collector.record(Some(&action.name));
-                    actions.push((sid_str.clone(), action));
-                } else {
-                    pre_collector.record(None);
-                }
+        let cand = cadence
+            .fires_on(tick)
+            .then(|| origin.organism(&sid_str).map(|org| (org.pos, org.energy)))
+            .flatten();
+        if let Some((pos, energy)) = cand {
+            sref.pos = pos;
+            sref.energy = energy;
+            let observations = origin
+                .observe(&sref)
+                .map_err(|e| CognitionError::Unavailable(format!("observe failed: {e}")))?;
+            let ctx = DecisionContext {
+                subject_id: sid_str.clone(),
+                tick,
+                energy: sref.energy,
+                observations,
+                manifest: origin.manifest().clone(),
+                memory: vec![],
+            };
+            let decision = backend.decide(&ctx)?;
+            crate::cognition::validate_decision(origin.manifest(), &decision)?;
+            crate::cognition::charge_cognition(
+                &mut ledger,
+                tick,
+                &crate::cognition::CognitionCost {
+                    cognition_events: 1,
+                    tokens: 0,
+                },
+                &sid_str,
+            );
+            log.push(EventPayload::DecisionMade {
+                subject_id: sid_str.clone(),
+                tick,
+                decision: decision.clone(),
+            });
+            if let Some(action) = decision.action {
+                pre_collector.record(Some(&action.name));
+                actions.push((sid_str.clone(), action));
+            } else {
+                pre_collector.record(None);
             }
         }
         let world_events = origin.tick(&actions);
-        log.push(EventPayload::WorldEvents { tick, events: world_events });
+        log.push(EventPayload::WorldEvents {
+            tick,
+            events: world_events,
+        });
         if let Some(org) = origin.organism(&sid_str) {
             sref.pos = org.pos;
             sref.energy = org.energy;
@@ -195,7 +198,7 @@ pub fn run_world_migration(
 
     // ---- Destination world: network ring, second half ----
     let mut network = NetworkWorld::new(config.network.clone(), config.world_seed);
-    let node = (config.world_seed % config.network.nodes.max(1)) as u32;
+    let node = (config.world_seed % config.network.nodes.max(1) as u64) as u32;
     network.admit_subject(&sid_str, node, carried_energy);
 
     let mut post_collector = ActionCollector::new();
@@ -245,7 +248,10 @@ pub fn run_world_migration(
             }
         }
         let world_events = network.tick(&actions);
-        log.push(EventPayload::WorldEvents { tick, events: world_events });
+        log.push(EventPayload::WorldEvents {
+            tick,
+            events: world_events,
+        });
     }
 
     log.push(EventPayload::ExperimentFinished {
@@ -260,4 +266,48 @@ pub fn run_world_migration(
             &post_collector.fingerprint(),
         )],
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn world_migration_produces_continuity_vector() {
+        let dir = std::env::temp_dir().join(format!("ts-wmig-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let cfg = WorldMigrationConfig::default();
+        let result = run_world_migration(&cfg, &dir.join("events.jsonl")).unwrap();
+        assert!(!result.dimensions.is_empty());
+        assert!(result.migration_id.is_some());
+        // Event log must contain the migration event.
+        let records = crate::event_log::read_log(&dir.join("events.jsonl")).unwrap();
+        let has_migration = records
+            .iter()
+            .any(|r| matches!(r.payload, EventPayload::Migration { .. }));
+        assert!(has_migration, "migration event must be logged");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn world_migration_deterministic_with_mock_backend() {
+        let run = || {
+            let cfg = WorldMigrationConfig::default();
+            let dir = std::env::temp_dir().join(format!(
+                "ts-wmig-det-{}-{}",
+                std::process::id(),
+                cfg.experiment_id
+            ));
+            std::fs::create_dir_all(&dir).unwrap();
+            let result = run_world_migration(&cfg, &dir.join("events.jsonl")).unwrap();
+            let _ = std::fs::remove_dir_all(&dir);
+            result.dimensions[0].value
+        };
+        let v1 = run();
+        let v2 = run();
+        assert!(
+            (v1 - v2).abs() < 1e-6,
+            "same seed must give same continuity"
+        );
+    }
 }

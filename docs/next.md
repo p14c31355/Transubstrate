@@ -22,13 +22,15 @@ exploration recorded)
       docs/experiments/temperature-sweep.md. Temp 1.0 cell collected
       (PR#43): 2/4 valid seeds learned SIGNAL, 1 schema-rejection
       (`ABSORBT` typo) — WABIX fail-safe OBSERVED end-to-end.
-- [x] Boundary-anchored memory sampling: `memory_usage` dimension (PR#42) —
-      of the actions remembered AT the boundary, what fraction was
-      re-enacted post-swap. Calibrated: rule→LLM 1.0 (boundary memory
-      re-enacted), rule→echo 0.0 (echo picks WAIT, memory unused). Not
-      masked by FIFO roll-off.
+- [x] Boundary-anchored memory sampling: `memory_usage` dimension (PR#42,
+      #44) — of the actions remembered AT the boundary, what fraction was
+      re-enacted post-swap. Calibrated: rule→LLM 1.0, rule→echo 0.0,
+      world-migration signal-seeker 0.5 (SIGNAL→ABSORB flip = partial
+      usage). Wired into BOTH harnesses; not masked by FIFO roll-off.
 - [ ] Cross-model outcome learning: does qwen3.5 (thinking-style, reasoning
       off) also learn SIGNAL from outcomes at temp>0?
+- [ ] Record memory_usage numbers for LLM runs (temp sweep re-run with the
+      5-dimension vector; rule/echo calibrations only so far).
 
 ## 2. Research experiments
 

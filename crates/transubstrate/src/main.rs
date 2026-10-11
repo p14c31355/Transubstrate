@@ -60,6 +60,10 @@ enum Commands {
         /// Starting energy per organism.
         #[arg(long, default_value_t = 10.0)]
         energy: f32,
+        /// Energy regeneration per cell per tick (lower = the field binds;
+        /// default 0.01 regenerates faster than 8 organisms consume).
+        #[arg(long, default_value_t = 0.01)]
+        regen: f32,
         #[arg(long, default_value = "runs")]
         out: PathBuf,
     },
@@ -378,6 +382,7 @@ fn main() {
             backend,
             seed,
             energy,
+            regen,
             out,
         } => {
             let backend_kind = match parse_any_backend(&backend, seed) {
@@ -389,7 +394,10 @@ fn main() {
             };
             let config = ts_core::primordial_experiment::PrimordialExperimentConfig {
                 experiment_id: ExperimentId::generate(),
-                world: Default::default(),
+                world: ts_core::primordial::PrimordialConfig {
+                    regen_rate: regen,
+                    ..Default::default()
+                },
                 world_seed: seed,
                 ticks,
                 cognition_interval,

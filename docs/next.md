@@ -95,13 +95,15 @@ the batch sweep runner all merged)
       explicit in the record).
 - [ ] Chemical-field meaning formation (the semantics-free substrate is
       still unused by controllers).
-- [ ] Carrying capacity: tune regen vs consumption so the field actually
-      binds (currently regen dominates at 0.01/cell/tick); rerun
-      reproduction experiments under binding scarcity. NOTE: an emergent
-      node-level carrying capacity is ALREADY OBSERVED in the network world
-      (gradient-steered followers: 2/6 survive at the emitter —
-      docs/experiments/signaling-followers.md); the remaining work is the
-      primordial grid's field-level bind.
+- [x] Carrying capacity (primordial field): `--regen` flag added; at regen
+      0.0005 the survivor count converges to 13-16 as the initial
+      population grows 8→48 (deaths 0→35) — the field's supply sets the
+      population cap, field energy reaches a supply=consumption steady
+      state (docs/experiments/carrying-capacity.md). Births still zero
+      under scarcity (divide threshold unreachable at equilibrium energy).
+- [ ] Reproduction under binding scarcity: a divide threshold reachable
+      at equilibrium energy — do lineages expand to the carrying-capacity
+      limit and stabilize there?
 
 ## 3. M9 continuation — world migration
 

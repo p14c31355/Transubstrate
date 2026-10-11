@@ -558,7 +558,21 @@ fn main() {
                     regen_rate: regen,
                     ..Default::default()
                 };
-                results.push((*seed, ts_core::scarcity::run_scarcity(&cfg, None)));
+                // Event log + manifest per seed: deterministic experiment id
+                // (scarcity-<hash>) keeps reruns reproducible and lets
+                // `replay`/`verify` work on scarcity logs too.
+                let log_dir = out.join(format!(
+                    "scarcity-{}",
+                    ts_core::continuity::fnv1a64(
+                        format!("{}|{}|{}", cfg.world_seed, cfg.ticks, cfg.regen_rate).as_bytes()
+                    )
+                ));
+                let _ = std::fs::create_dir_all(&log_dir);
+                let log_path = log_dir.join("events.jsonl");
+                results.push((
+                    *seed,
+                    ts_core::scarcity::run_scarcity(&cfg, Some(&log_path)),
+                ));
             }
             println!(
                 "{:>6} {:>6} {:>6} {:>6} {:>6} {:>8} {:>8} {:>10}",

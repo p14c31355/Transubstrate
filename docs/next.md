@@ -128,9 +128,13 @@ the batch sweep runner all merged)
 - [x] Batch/seed-sweep runner: `sweep-world-migration --seeds 1,7,42,...`
       emits a mean ± sd JSON summary per dimension (PR#39). CSV output and a
       run-migration sweep remain open.
-- [ ] Emit ExperimentManifest automatically next to every event log for
-      the migration and scarcity harnesses (test/primordial already emit;
-      migration/scarcity emission verified wired — verify with a fresh run).
+- [x] ExperimentManifest emission verified end-to-end with fresh runs:
+      migration (kind: migration), world migration + population
+      (population_migration), primordial, scarcity (after wiring the CLI
+      to pass a log path — previously the scarcity CLI ran log-less so no
+      manifest was written). Scarcity logs are thin (ExperimentStarted
+      only) but verify/replay work on them; fuller scarcity event streams
+      remain future work.
 - [ ] Regenerate population samples with real field_energy (extend
       SubjectState POPULATION payload).
 

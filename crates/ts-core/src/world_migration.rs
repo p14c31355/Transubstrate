@@ -32,6 +32,17 @@ pub struct WorldMigrationConfig {
     pub backend: crate::primordial_experiment::BackendKind,
     /// Network-world topology (destination world config).
     pub network: crate::network_world::NetworkConfig,
+    /// Memory ablation switch (default true = the SUBJECT != MODEL design).
+    /// When false, the subject's memory is WIPED at the migration boundary:
+    /// the destination world's decisions run with an empty buffer. Comparing
+    /// carry vs wipe makes memory a causal experimental variable instead of
+    /// a correlational one.
+    #[serde(default = "default_true")]
+    pub memory_carry: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 impl Default for WorldMigrationConfig {
@@ -47,6 +58,7 @@ impl Default for WorldMigrationConfig {
                 absorb_threshold: 0.3,
             },
             network: crate::network_world::NetworkConfig::default(),
+            memory_carry: true,
         }
     }
 }
@@ -63,6 +75,14 @@ pub struct WorldMigrationResult {
     /// Per-dimension migration effect: migration − control (negative =
     /// the swap hurt that dimension relative to staying put).
     pub effect: crate::continuity::ContinuityVector,
+    /// Ablation contrast (present only when config.memory_carry is false):
+    /// continuity of the SAME migration with memory wiped at the boundary.
+    /// Comparing `continuity` vs `ablation_continuity` isolates what the
+    /// carried memory CAUSES, beyond correlation.
+    pub ablation_continuity: Option<crate::continuity::ContinuityVector>,
+    /// ablation_continuity − continuity per dimension (positive = carrying
+    /// memory helped that dimension). None when memory_carry is true.
+    pub ablation_effect: Option<crate::continuity::ContinuityVector>,
 }
 
 /// Run a world migration: subject starts in the primordial world, migrates
@@ -204,6 +224,15 @@ pub fn run_world_migration(
     // the origin world vs what is carried into the destination world is the
     // memory-retention dimension (memory belongs to the subject).
     let memory_pre: Vec<crate::cognition::MemoryEntry> = memory.clone();
+    // Memory ablation: when memory_carry is false, the buffer is wiped at
+    // the boundary — the destination world's cognition starts amnesic. This
+    // is the causal counterpart of the correlational memory_usage reading:
+    // any continuity difference between carry and wipe runs is attributable
+    // to the carried memory itself.
+    let ablated = !config.memory_carry;
+    if ablated {
+        memory.clear();
+    }
     let migration = MigrationEvent::new(
         &sid_str,
         "world",
@@ -341,6 +370,40 @@ pub fn run_world_migration_experiment(
     let control_path = log_path.with_extension("control.jsonl");
     let control_continuity = run_world_control(config, &control_path)?;
 
+    // ---- Ablation arm (memory_carry = false only): the same migration
+    // with the boundary wipe. Its own log keeps replay independence.
+    // memory_carry=false in `config` means `continuity` IS the ablation
+    // run, so the arm runs only in the default carry mode.
+    let (ablation_continuity, ablation_effect) = if config.memory_carry {
+        let mut ablated_config = config.clone();
+        ablated_config.memory_carry = false;
+        ablated_config.experiment_id = ExperimentId::generate();
+        let ablation_path = log_path.with_extension("ablation.jsonl");
+        let ablated = run_world_migration(&ablated_config, &ablation_path)?;
+        let mut effect_dims = Vec::new();
+        for (carried, wiped) in continuity.dimensions.iter().zip(ablated.dimensions.iter()) {
+            effect_dims.push(ContinuityDimension {
+                name: format!("ablation_effect_{}", carried.name),
+                // positive = carrying memory helped that dimension
+                value: carried.value - wiped.value,
+                computation: format!(
+                    "carry({:.4}) - wipe({:.4}); wipe computation: {}",
+                    carried.value, wiped.value, wiped.computation
+                ),
+            });
+        }
+        (
+            Some(ablated),
+            Some(ContinuityVector {
+                subject_id: continuity.subject_id.clone(),
+                migration_id: continuity.migration_id.clone(),
+                dimensions: effect_dims,
+            }),
+        )
+    } else {
+        (None, None)
+    };
+
     // Per-dimension migration effect against the control.
     let subject_id = continuity.subject_id.clone();
     let migration_id = continuity.migration_id.clone();
@@ -370,6 +433,8 @@ pub fn run_world_migration_experiment(
             migration_id,
             dimensions: effect_dimensions,
         },
+        ablation_continuity,
+        ablation_effect,
     })
 }
 

@@ -33,6 +33,12 @@ the batch sweep runner all merged)
 - [x] Record memory_usage numbers for LLM runs: temp-0.3 5-dimension sweep
       (PR#47 record, n=5) — 4/5 usage 1.0 (swap-robust), 1 seed 0.0 across
       all dimensions (full strategy replacement ABSORB→SIGNAL).
+- [ ] Memory ablation (CAUSAL): `memory_carry: bool` + boundary wipe in BOTH
+      harnesses; `--no-memory` CLI flag; per-seed ablation arm in
+      `sweep-world-migration` (carry − wipe effect in the JSON summary).
+      Rule-backend calibration: ablation effect 0.0 (rule backends do not
+      read memory — a true negative, the detector shows no artifact).
+      LLM carry-vs-wipe data collection in flight.
 
 ## 2. Research experiments
 

@@ -47,6 +47,16 @@ pub struct MigrationExperimentConfig {
     pub backend_a: BackendKind,
     /// Backend after migration.
     pub backend_b: BackendKind,
+    /// Memory ablation switch (default true = the SUBJECT != MODEL design).
+    /// When false, the subject's memory is WIPED at the migration boundary:
+    /// backend B starts with an empty buffer. Comparing carry vs wipe makes
+    /// memory a causal experimental variable instead of a correlational one.
+    #[serde(default = "default_true")]
+    pub memory_carry: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 impl MigrationExperimentConfig {
@@ -60,6 +70,7 @@ impl MigrationExperimentConfig {
             start_energy: 30.0,
             backend_a,
             backend_b,
+            memory_carry: true,
         }
     }
 }
@@ -102,6 +113,10 @@ pub struct MigrationExperimentResult {
     /// The migration effect estimate: migration_continuity - control_continuity.
     /// Negative = behavior changed more than the no-migration baseline.
     pub migration_effect: f32,
+    /// Ablation contrast (present only when config.memory_carry is true):
+    /// a second migration run with the buffer wiped at the boundary, and its
+    /// per-dimension effect (carry − wipe; positive = carrying memory helped).
+    pub ablation: Option<(ContinuityVector, ContinuityVector)>,
 }
 
 /// Run one single-subject phase with a fixed backend, collecting actions.
@@ -301,6 +316,12 @@ pub fn run_migration_experiment(
     // Snapshot the subject's memory AT the boundary: what is remembered
     // going in vs what is carried out is the memory-retention dimension.
     let memory_pre: Vec<crate::cognition::MemoryEntry> = memory.clone();
+    // Memory ablation: when memory_carry is false, the buffer is wiped at
+    // the boundary — backend B starts amnesic. The carry-vs-wipe contrast
+    // makes carried memory a causal variable.
+    if !config.memory_carry {
+        memory.clear();
+    }
 
     let mut backend_b = config.backend_b.instantiate();
     let phase_b = run_phase(
@@ -435,6 +456,42 @@ pub fn run_migration_experiment(
         dimensions: vec![behavioral, memory_continuity, memory_usage],
     };
 
+    // ---- Ablation arm (memory_carry = true only): same migration with the
+    // boundary wipe, own experiment id and log for replay independence.
+    let ablation = if config.memory_carry {
+        let mut ablated_config = config.clone();
+        ablated_config.memory_carry = false;
+        ablated_config.experiment_id = ExperimentId::generate();
+        let ablation_path = log_path.with_extension("ablation.jsonl");
+        let ablated = run_migration_experiment(&ablated_config, &ablation_path)?;
+        let mut effect_dims = Vec::new();
+        for (carried, wiped) in continuity
+            .dimensions
+            .iter()
+            .zip(ablated.continuity.dimensions.iter())
+        {
+            effect_dims.push(ContinuityDimension {
+                name: format!("ablation_effect_{}", carried.name),
+                // positive = carrying memory helped that dimension
+                value: carried.value - wiped.value,
+                computation: format!(
+                    "carry({:.4}) - wipe({:.4}); wipe computation: {}",
+                    carried.value, wiped.value, wiped.computation
+                ),
+            });
+        }
+        Some((
+            ablated.continuity,
+            ContinuityVector {
+                subject_id: sid.clone(),
+                migration_id: Some(migration.migration_id.clone()),
+                dimensions: effect_dims,
+            },
+        ))
+    } else {
+        None
+    };
+
     log.push(EventPayload::ExperimentFinished {
         reason: "migration experiment complete".into(),
     });
@@ -448,6 +505,7 @@ pub fn run_migration_experiment(
         continuity,
         control_continuity,
         migration_effect,
+        ablation,
     })
 }
 

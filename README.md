@@ -149,6 +149,19 @@ cargo run --release -- sweep-world-migration --seeds 1,7,42,99,123 \
     --backend energy-rule --summary summary.json
 ```
 
+Memory is part of the subject, not the backend (SUBJECT != MODEL). The
+sweep also runs a per-seed ablation arm — the same migration with the
+memory buffer wiped at the boundary — and reports the carry − wipe
+`ablation_effect` per dimension: a positive value means the carried
+memory causally helped continuity on that seed. `--no-memory` runs the
+pure ablation condition only.
+
+```sh
+cargo run --release -- sweep-world-migration --seeds 42,7,99,123,2026 \
+    --backend llm:granite4.1:3b-q4_K_M --llm-temperature 0.3 \
+    --summary summary.json
+```
+
 Optionally, set `TS_BENCH_LLM_MODEL=<model>` to also measure local LLM
 cognition throughput (decisions/sec, mean latency). The section is omitted
 when no endpoint is reachable, so the benchmark stays CI-safe.

@@ -113,8 +113,10 @@ Last updated: 2026-10-11 (PR#28 merged — world-migration A/B control + effect)
 - Memory retention is measured only by content match; no LLM run has yet
   shown a subject USING retained memory after a swap.
 - No machine/process migration yet.
-- Multi-seed statistics exist only for the M8 migration (3 seeds) and PR#12
-  competition (5 seeds); other experiments are single-seed observations.
+- Multi-seed statistics exist for the rule→LLM migration (5 seeds, PR#26
+  record and llm-model-migration-stats.md), PR#12 competition (5 seeds), and
+  the LLM world migration (5 seeds); other experiments are single-seed
+  observations.
 - The 3-seed agreement in M8 reflects temperature-0 prompting structure, not
   proven robustness across models or prompt variants.
 

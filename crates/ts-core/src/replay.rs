@@ -113,6 +113,7 @@ pub fn regenerate_from_records(records: &[EventRecord]) -> RegeneratedMetrics {
                 }
             }
             EventPayload::DecisionObservation { .. } => {}
+            EventPayload::BirthRecorded { .. } => {}
             EventPayload::DecisionMade { decision, .. } => {
                 m.decisions += 1;
                 match &decision.action {

@@ -107,11 +107,12 @@ the batch sweep runner all merged)
       probe 1.0 = overshoot-collapse-turnover (8→256→17, deaths 239,
       max generation 10-12 — first mutation accumulation across
       generations) (docs/experiments/move-density.md).
-- [ ] Genome drift over the 12-generation lineages: genome_at_birth is
-      recorded in the lineage tree; analyze whether the threshold-6.0
-      founder lineage drifts, and whether any drift re-enters the
-      collapse regime (GOAL §8 genetic transmission, first testable
-      data).
+- [x] Genome drift over the 10-12-generation lineages: `BirthRecorded`
+      event added (birth genomes now live in the event log);
+      division_threshold drifts UPWARD 6.0 → 7.4-9.9 in 5/5 seeds
+      (directional across all seeds; r→K-like shift under cap-full
+      turnover; selection vs drift not separated — fitness comparison
+      is the next step) (docs/experiments/genome-drift.md).
 - [x] Long-run stability (GOAL §29 scale): 100k-tick runs, 5/5 seeds —
       population frozen at capacity 16, zero deaths, field surplus ~29k
       accumulates linearly; births freeze (intake-rate ceiling distinct

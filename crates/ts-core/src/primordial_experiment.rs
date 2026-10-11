@@ -437,6 +437,15 @@ pub fn run_primordial(
                                 death_tick: None,
                                 generation: child_org.generation,
                             });
+                            // Birth genome into the event log: the
+                            // genetic-transmission record (drift analysis
+                            // runs post-hoc from logs, no rerun needed).
+                            log.push(EventPayload::BirthRecorded {
+                                subject_id: child.to_string(),
+                                parent: subject.clone(),
+                                tick,
+                                genome: child_org.genome.clone(),
+                            });
                         }
                     } else {
                         match action.as_str() {

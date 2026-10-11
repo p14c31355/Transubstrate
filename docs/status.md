@@ -117,8 +117,9 @@ Last updated: 2026-10-11 (PR#28 merged — world-migration A/B control + effect)
   record and llm-model-migration-stats.md), PR#12 competition (5 seeds), and
   the LLM world migration (5 seeds); other experiments are single-seed
   observations.
-- The 3-seed agreement in M8 reflects temperature-0 prompting structure, not
-  proven robustness across models or prompt variants.
+- The temperature-0 seed agreement is prompting structure, not cross-model
+  invariance: qwen3.5:2b-q4_K_M diverges from granite4.1 (behavioral 0.00 vs
+  0.75) under the identical rule→LLM harness (cross-model-migration.md).
 
 ## What is blocked / deferred
 

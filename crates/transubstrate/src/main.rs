@@ -184,15 +184,26 @@ fn parse_primordial_backend(
     }
 }
 
-/// Parse a migration/primal backend spec, supporting `llm:<model>` syntax.
+/// Parse a migration/primal backend spec, supporting `llm:<model>` syntax
+/// with an optional reasoning-effort suffix: `llm:<model>[:<effort>]`.
+/// Thinking-style models (qwen3.5 etc.) need `:none` to stop hidden
+/// reasoning from consuming the completion budget.
 fn parse_any_backend(
     name: &str,
     seed: u64,
 ) -> Result<ts_core::primordial_experiment::BackendKind, String> {
     use ts_core::primordial_experiment::BackendKind as PB;
-    if let Some(model) = name.strip_prefix("llm:") {
+    if let Some(rest) = name.strip_prefix("llm:") {
+        // Model tags contain ':' (e.g. "qwen3.5:2b-q4_K_M"), so the effort
+        // suffix is only recognized when it is a known effort value.
+        const KNOWN_EFFORTS: [&str; 4] = ["none", "low", "medium", "high"];
+        let (model, reasoning_effort) = match rest.rsplit_once(':') {
+            Some((m, effort)) if KNOWN_EFFORTS.contains(&effort) => (m, Some(effort.to_string())),
+            _ => (rest, None),
+        };
         let cfg = ts_core::llm_backend::LlmBackendConfig {
             model: model.to_string(),
+            reasoning_effort,
             ..Default::default()
         };
         // LLM backends are wired per-run by the experiment runner (shared

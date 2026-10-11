@@ -25,8 +25,10 @@ scarcity/competition experiments merged)
       docs/experiments/llm-model-migration-stats.md. memory_retention 0.0 is
       a FIFO roll-off artifact (40 decisions/phase vs limit 8); a
       boundary-anchored sampling is the design follow-up.
-- [ ] Second model for cross-model robustness (e.g. qwen3.5:2b) to break the
-      temperature-0 tie.
+- [x] Second model for cross-model robustness: qwen3.5:2b-q4_K_M breaks the
+      temperature-0 tie — behavioral 0.00 vs granite's 0.75 under the
+      identical harness (docs/experiments/cross-model-migration.md). Post-
+      migration behavior is model-dependent, as SUBJECT != MODEL predicts.
 
 ## 2. Research experiments
 

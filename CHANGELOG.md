@@ -74,3 +74,12 @@ All notable changes to Transubstrate are documented here.
 - Verified against real logs: regenerated ABSORB count == run summary
   count; migration logs count 1 migration; tampered seq detected
 - 59 tests passing
+
+### Added (feat/second-world, unmerged)
+- NetworkWorld (`network-v0`): ring-topology world behind WABIX — nodes,
+  node energy, decaying signal field, WAIT/ABSORB/SIGNAL/HOP, metabolism,
+  death, admit_subject() for world-migration with carried-over energy
+- WorldMigrationConfig/Result + run_world_migration: subject migrates from
+  primordial (grid) to network (ring) at midpoint with carried-over energy;
+  pre/post fingerprints + same-world control continuity
+- 79 tests passing

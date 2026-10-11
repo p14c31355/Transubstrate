@@ -11,6 +11,7 @@ pub mod ids;
 pub mod lineage;
 pub mod llm_backend;
 pub mod migration_experiment;
+pub mod network_world;
 pub mod primordial;
 pub mod primordial_experiment;
 pub mod replay;

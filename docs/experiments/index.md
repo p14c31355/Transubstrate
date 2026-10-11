@@ -18,7 +18,8 @@ kept, and nothing here claims emergence.
 | 9 | World migration, rule controller | PR#22 | OBSERVED (behavioral 0.0 — rule breaks across worlds) |
 | 10 | World migration, LLM cognition | docs/experiments/llm-world-migration.md | OBSERVED (5 seeds: behavioral 0.975±0, memory_retention 1.0±0; INTERPRETATION: conservative policy, not skill transfer) |
 | 11 | World migration A/B with no-swap control | PR#28 + record update | OBSERVED (effect: rule −1.0/−1.0 = swap-fragile; LLM ±0.0 = swap-robust) |
-| 12 | Signal-driven energy pull (network world) | docs/experiments/signal-pull.md | OBSERVED (signal-seeker flips SIGNAL→ABSORB across the boundary; engineered payoff, not emergence) |
+| 12 | Rule → LLM migration, multi-seed statistics | docs/experiments/llm-model-migration-stats.md | OBSERVED (n=5: behavioral 0.75±0, memory_retention 0.0±0 — buffer fully rolls over; effect −0.25±0) |
+| 13 | Signal-driven energy pull (network world) | docs/experiments/signal-pull.md | OBSERVED (signal-seeker flips SIGNAL→ABSORB across the boundary; engineered payoff, not emergence) |
 
 ## Running an experiment
 

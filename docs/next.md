@@ -20,8 +20,13 @@ scarcity/competition experiments merged)
       boundary (PR#23).
 - [ ] LLM prompt already renders memory entries — verify end-to-end with
       granite4.1:3b-q4_K_M and record decision quality vs memory length.
-- [ ] Multi-seed statistics for the LLM migration effect (n>=5, report
-      mean ± sd; stop single-run anecdotes), now across BOTH dimensions.
+- [x] Multi-seed statistics for the LLM migration effect (n=5: behavioral
+      0.75±0, memory_retention 0.0±0, effect −0.25±0) — recorded in
+      docs/experiments/llm-model-migration-stats.md. memory_retention 0.0 is
+      a FIFO roll-off artifact (40 decisions/phase vs limit 8); a
+      boundary-anchored sampling is the design follow-up.
+- [ ] Second model for cross-model robustness (e.g. qwen3.5:2b) to break the
+      temperature-0 tie.
 
 ## 2. Research experiments
 

@@ -10,6 +10,7 @@ kept, and nothing here claims emergence.
 | 1 | Primordial survival (energy-rule / echo / random) | PR#3 descriptions | OBSERVED (single runs) |
 | 2 | Reproduction / lineage growth | PR#4 descriptions | OBSERVED (8 founders → 32 alive, cap enforced) |
 | 3 | Controller migration + controls (M5) | PR#5 | OBSERVED (calibration) |
+| 30 | Genome drift across generations | docs/experiments/genome-drift.md | FIRST genetic-transmission data: BirthRecorded event logs birth genomes; division_threshold drifts UPWARD 6.0→7.4-9.9 in 5/5 seeds over 10-12 generations (r→K-like shift under cap-full turnover); selection vs drift not separated |
 | 4 | Replay determinism (M6) | PR#6 | OBSERVED (regeneration matches summaries) |
 | 5 | Real LLM cognition (M7, 80/80 valid) | PR#8 | OBSERVED (single model) |
 | 6 | Rule → LLM migration (M8) | PR#9, PR#10 | OBSERVED (3 seeds, continuity 0.10 / effect −0.90) |

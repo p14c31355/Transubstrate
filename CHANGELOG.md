@@ -195,6 +195,13 @@ All notable changes to Transubstrate are documented here.
   rule calibration lag 0 stable; granite 0.3 2/5 adapt (lag 50-100,
   persist); temp 1.0 lag-0 switches separated from learning via the
   persistence flag; qwen 1/5 switch reverts
+- Genome drift across generations (first genetic-transmission data):
+  `EventPayload::BirthRecorded` logs every birth genome (the lineage
+  tree was memory-only before); in the turnover equilibrium the
+  division threshold drifts UPWARD from the founder 6.0 to 7.4-9.9 over
+  10-12 generations in 5/5 seeds — directional, r→K-like, mechanism
+  inferred not proven; GOAL §8 "can inherited configuration spread"
+  now has a measured positive instance
 - Movement vs supply density + turnover equilibrium: mobile-rule
   starvation detector redesigned twice (energy tests never fire;
   all-decision sums always fire — a rejected DIVIDE says nothing about

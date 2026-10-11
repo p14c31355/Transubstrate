@@ -58,6 +58,16 @@ pub enum EventPayload {
         pos: (u32, u32),
         energy: f32,
     },
+    /// A birth: the child's INHERITED configuration (genome) at birth —
+    /// the genetic-transmission record. Without this, genome drift across
+    /// generations is invisible in the log (the lineage tree lives in
+    /// memory only).
+    BirthRecorded {
+        subject_id: String,
+        parent: String,
+        tick: u64,
+        genome: crate::lineage::Genome,
+    },
     /// A migration event (M5): subject transitions substrate.
     Migration {
         subject_id: String,

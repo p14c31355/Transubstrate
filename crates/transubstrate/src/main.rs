@@ -1297,6 +1297,20 @@ fn main() {
                             r.seq
                         )
                     }
+                    EventPayload::BirthRecorded {
+                        subject_id,
+                        parent,
+                        tick,
+                        genome,
+                    } => format!(
+                        "seq={} BIRTH t={tick} subj={subject_id} parent={parent} threshold={:.2} affinity={:.2} sig={:.2} mov={:.2} mut={:.2}",
+                        r.seq,
+                        genome.division_threshold,
+                        genome.absorb_affinity,
+                        genome.signal_bias,
+                        genome.move_bias,
+                        genome.mutation_rate
+                    ),
                     EventPayload::WorldEvents { tick, events } => format!(
                         "seq={} WORLD t={tick} {}",
                         r.seq,

@@ -139,6 +139,12 @@ Last updated: 2026-10-11 (PR#52-#57 arc — memory ablation, signaling economics
   under the identical harness — post-migration behavior is model-dependent.
 - LLM integration (M7): granite4.1:3b-q4_K_M produced valid typed decisions
   in 80/80 cognition events on the reference GPU; zero schema rejections.
+- Genetic transmission (FIRST POSITIVE, 5/5 seeds): `BirthRecorded`
+  logs every birth genome; in the turnover regime the division
+  threshold drifts UPWARD from 6.0 to 7.4-9.9 over 10-12 generations in
+  every seed (r→K-like shift; mechanism inferred, selection vs drift
+  not separated) — inherited configuration demonstrably spreads across
+  generations (genome-drift.md).
 - Turnover equilibrium (NEW REGIME, 5/5 seeds): `--divide-probe 1.0`
   (keep foraging, keep proposing DIVIDE) flips the population from
   frozen stability to OVERSHOOT-COLLAPSE-TURNOVER — 8→cap 256→starvation

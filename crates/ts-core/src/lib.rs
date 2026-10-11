@@ -16,5 +16,6 @@ pub mod replay;
 pub mod resource;
 pub mod rng;
 pub mod runtime;
+pub mod scarcity;
 pub mod test_world;
 pub mod wabix;

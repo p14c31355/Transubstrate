@@ -8,6 +8,7 @@ pub mod event_log;
 pub mod experiment;
 pub mod ids;
 pub mod lineage;
+pub mod llm_backend;
 pub mod migration_experiment;
 pub mod primordial;
 pub mod primordial_experiment;

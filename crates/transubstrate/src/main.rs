@@ -136,6 +136,24 @@ fn parse_primordial_backend(
     }
 }
 
+/// Parse a migration/primal backend spec, supporting `llm:<model>` syntax.
+fn parse_any_backend(
+    name: &str,
+    seed: u64,
+) -> Result<ts_core::primordial_experiment::BackendKind, String> {
+    use ts_core::primordial_experiment::BackendKind as PB;
+    if let Some(model) = name.strip_prefix("llm:") {
+        let cfg = ts_core::llm_backend::LlmBackendConfig {
+            model: model.to_string(),
+            ..Default::default()
+        };
+        // LLM backends are wired per-run by the experiment runner (shared
+        // instance); the enum variant carries the config.
+        return Ok(PB::Llm { config: cfg });
+    }
+    parse_primordial_backend(name, seed)
+}
+
 fn parse_migration_backend(
     name: &str,
     seed: u64,
@@ -215,7 +233,7 @@ fn main() {
             energy,
             out,
         } => {
-            let backend_kind = match parse_primordial_backend(&backend, seed) {
+            let backend_kind = match parse_any_backend(&backend, seed) {
                 Ok(b) => b,
                 Err(e) => {
                     eprintln!("{e}");

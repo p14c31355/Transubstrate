@@ -139,6 +139,14 @@ Last updated: 2026-10-11 (PR#52-#57 arc — memory ablation, signaling economics
   under the identical harness — post-migration behavior is model-dependent.
 - LLM integration (M7): granite4.1:3b-q4_K_M produced valid typed decisions
   in 80/80 cognition events on the reference GPU; zero schema rejections.
+- Long-run stability (100k ticks, 5/5 seeds, reproducing-rule at the
+  PR#65 threshold-6.0 regime): population perfectly stationary at the
+  carrying capacity 16 (zero deaths), field surplus accumulates linearly
+  (~29k units), births freeze at generation 1 — intake-rate ceiling, not
+  population cap. Movement hypothesis TESTED and REJECTED: an
+  outcome-driven mobile rule crashes (movement cost exceeds supply
+  density) — stationary waiting is the adaptive strategy in this regime
+  (long-run-stability.md).
 - Chemical meaning formation (NEGATIVE): with marks logged and
   observable (nearby_chemical_0), LLM observers sensed the gradient in
   ~98% of decisions but their behavior was unchanged —

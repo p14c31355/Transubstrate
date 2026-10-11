@@ -45,6 +45,14 @@ pub enum BackendKind {
         absorb_threshold: f32,
         mark_threshold: f32,
     },
+    /// Mobile reproducing rule: like ReproducingRule but takes a random
+    /// step after a few starved decisions — tests whether movement
+    /// converts accumulated field surplus into population growth.
+    MobileReproducing {
+        absorb_threshold: f32,
+        divide_probe: f32,
+        starve_patience: u32,
+    },
     Malformed,
     /// Local LLM via OpenAI-compatible endpoint. One SHARED backend serves
     /// the whole population (the model loads once; VRAM does not scale with
@@ -83,6 +91,15 @@ impl BackendKind {
                 absorb_threshold: *absorb_threshold,
                 mark_threshold: *mark_threshold,
             }),
+            BackendKind::MobileReproducing {
+                absorb_threshold,
+                divide_probe,
+                starve_patience,
+            } => Box::new(crate::backends::MobileReproducingRuleBackend::new(
+                *absorb_threshold,
+                *divide_probe,
+                *starve_patience,
+            )),
             BackendKind::Malformed => Box::new(crate::backends::MalformedBackend::default()),
             BackendKind::Llm { config } => {
                 Box::new(crate::llm_backend::LlmBackend::new(config.clone()))
@@ -98,6 +115,7 @@ impl BackendKind {
             BackendKind::ReproducingRule { .. } => "rule-energy-divide-v0",
             BackendKind::SignalSeeker { .. } => "rule-signal-seeker-v0",
             BackendKind::ChemMarker { .. } => "rule-chem-marker-v0",
+            BackendKind::MobileReproducing { .. } => "rule-energy-divide-move-v0",
             BackendKind::Malformed => "mock-malformed-v0",
             BackendKind::Llm { .. } => "llm-openai-compat-v0",
         }

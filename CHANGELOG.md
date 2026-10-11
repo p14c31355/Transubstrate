@@ -195,6 +195,12 @@ All notable changes to Transubstrate are documented here.
   rule calibration lag 0 stable; granite 0.3 2/5 adapt (lag 50-100,
   persist); temp 1.0 lag-0 switches separated from learning via the
   persistence flag; qwen 1/5 switch reverts
+- Long-run stability (100k ticks × 5 seeds): population perfectly
+  stationary at the carrying capacity (0 deaths); field surplus
+  accumulates ~29k while births freeze — an intake-rate ceiling distinct
+  from the population cap; the movement hypothesis (mobile rule breaks
+  the ceiling) TESTED and REJECTED — mobile rule crashes because
+  movement cost exceeds supply density at regen 0.0005
 - Chemical meaning-formation detector: `WorldEvent::ChemicalMarked` logs
   every channel-1 mark; `nearby_chemical_0` channel (4-neighbor gradient
   reach); `DecisionObservation` snapshots per decision; `--markers N`

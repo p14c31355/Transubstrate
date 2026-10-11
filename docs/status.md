@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-10-11 (PR#37 merged — outcome-driven exploration observed)
+Last updated: 2026-10-11 (PR#40 merged — temperature sweep: temp 0.3 dominates 0.7)
 
 ## What currently works (all OBSERVED, verified on this repository's CI + local runs)
 
@@ -103,6 +103,12 @@ Last updated: 2026-10-11 (PR#37 merged — outcome-driven exploration observed)
   SIGNAL from past ticks"); seed 2026 adapted post-swap (ABSORB 38 →
   SIGNAL 23). First OBSERVED experience-driven action learning without
   human-assigned channel meaning. High variance: 2/5 deaths.
+- Temperature sweep (PR#40, n=5 per temp, batch via sweep-world-migration):
+  temp 0.3 dominates 0.7 — 3/5 seeds learned SIGNAL post-swap with ZERO
+  deaths (vs 2/5 learning, 2 deaths at 0.7); behavioral 0.65 ± 0.314
+  (bimodal: variance is the adoption signature, not noise). Post-swap
+  ABSORB → SIGNAL adaptation at 3/5 seeds is the strongest adaptation
+  evidence so far.
 - Cross-model (PR#35): qwen3.5:2b-q4_K_M behavioral 0.00 vs granite 0.75
   under the identical harness — post-migration behavior is model-dependent.
 - LLM integration (M7): granite4.1:3b-q4_K_M produced valid typed decisions
@@ -129,9 +135,10 @@ Last updated: 2026-10-11 (PR#37 merged — outcome-driven exploration observed)
   (FIFO roll-off masks it).
 - No machine/process migration yet.
 - Multi-seed statistics exist for the rule→LLM migration (5 seeds),
-  PR#12 competition (5 seeds), the LLM world migration (5 seeds), and
-  outcome exploration (5 seeds); other experiments are single-seed
-  observations.
+  PR#12 competition (5 seeds), the LLM world migration (5 seeds), outcome
+  exploration (5 seeds per temperature, PR#37 + PR#40), and the temperature
+  sweep is batch-collected via sweep-world-migration (PR#39); other
+  experiments are single-seed observations.
 - The temperature-0 seed agreement is prompting structure, not cross-model
   invariance: qwen3.5:2b-q4_K_M diverges from granite4.1 (behavioral 0.00 vs
   0.75) under the identical rule→LLM harness (cross-model-migration.md).

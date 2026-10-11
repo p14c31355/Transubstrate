@@ -198,13 +198,16 @@ enum Commands {
         #[arg(long, default_value_t = 5)]
         cognition_interval: u64,
         /// Comma-separated backend list, one population member each:
-        /// echo | random | energy-rule | signal-seeker.
+        /// echo | random | energy-rule | signal-seeker | llm:<model>[:<effort>].
         #[arg(long, value_delimiter = ',')]
         backends: Vec<String>,
         #[arg(long, default_value_t = 42)]
         seed: u64,
         #[arg(long, default_value_t = 20.0)]
         energy: f32,
+        /// LLM sampling temperature (llm: backends only; 0 = deterministic).
+        #[arg(long, default_value_t = 0.0)]
+        llm_temperature: f32,
     },
     /// Regenerate metrics from an event log without re-running cognition (M6).
     Replay {
@@ -1013,6 +1016,7 @@ fn main() {
             backends,
             seed,
             energy,
+            llm_temperature,
         } => {
             if backends.is_empty() {
                 eprintln!("--backends must list at least one backend");
@@ -1021,7 +1025,7 @@ fn main() {
             let mut kinds: Vec<ts_core::primordial_experiment::BackendKind> = Vec::new();
             for (i, spec) in backends.iter().enumerate() {
                 let kind = match parse_any_backend(spec, seed + i as u64) {
-                    Ok(b) => b,
+                    Ok(b) => apply_llm_temperature(b, llm_temperature),
                     Err(e) => {
                         eprintln!("{e}");
                         std::process::exit(2);

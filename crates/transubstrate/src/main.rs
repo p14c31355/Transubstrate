@@ -130,6 +130,31 @@ enum Commands {
         #[arg(long, default_value = "runs")]
         out: PathBuf,
     },
+    /// Run the world-migration experiment across MULTIPLE seeds and emit a
+    /// machine-readable summary (mean ± sd per dimension).
+    SweepWorldMigration {
+        /// Comma-separated seed list, e.g. "1,7,42,99,123".
+        #[arg(long, value_delimiter = ',')]
+        seeds: Vec<u64>,
+        #[arg(long, default_value_t = 400)]
+        ticks: u64,
+        #[arg(long, default_value_t = 5)]
+        cognition_interval: u64,
+        /// Cognition backend: echo | random | energy-rule | signal-seeker
+        #[arg(long, default_value = "energy-rule")]
+        backend: String,
+        /// LLM sampling temperature (llm: backends only; 0 = deterministic).
+        #[arg(long, default_value_t = 0.0)]
+        llm_temperature: f32,
+        #[arg(long, default_value_t = 20.0)]
+        energy: f32,
+        /// Output directory for per-seed runs.
+        #[arg(long, default_value = "runs")]
+        out: PathBuf,
+        /// Optional path for the JSON summary (default: stdout only).
+        #[arg(long)]
+        summary: Option<PathBuf>,
+    },
     /// Regenerate metrics from an event log without re-running cognition (M6).
     Replay {
         /// Path to the events.jsonl file.
@@ -647,6 +672,119 @@ fn main() {
                     eprintln!("experiment failed: {e}");
                     std::process::exit(1);
                 }
+            }
+        }
+        Commands::SweepWorldMigration {
+            seeds,
+            ticks,
+            cognition_interval,
+            backend,
+            llm_temperature,
+            energy,
+            out,
+            summary,
+        } => {
+            if seeds.is_empty() {
+                eprintln!("--seeds must contain at least one seed");
+                std::process::exit(2);
+            }
+            let mut per_seed: Vec<serde_json::Value> = Vec::new();
+            // dimension name -> Vec<value> across seeds (migration run only;
+            // the control is a no-swap invariant by construction).
+            let mut dim_series: std::collections::BTreeMap<String, Vec<f32>> =
+                std::collections::BTreeMap::new();
+            let mut dim_effect_series: std::collections::BTreeMap<String, Vec<f32>> =
+                std::collections::BTreeMap::new();
+
+            for seed in &seeds {
+                let backend_kind = match parse_any_backend(&backend, *seed) {
+                    Ok(b) => apply_llm_temperature(b, llm_temperature),
+                    Err(e) => {
+                        eprintln!("{e}");
+                        std::process::exit(2);
+                    }
+                };
+                let config = ts_core::world_migration::WorldMigrationConfig {
+                    experiment_id: ExperimentId::generate(),
+                    world: Default::default(),
+                    world_seed: *seed,
+                    ticks,
+                    cognition_interval,
+                    start_energy: energy,
+                    backend: backend_kind,
+                    network: Default::default(),
+                };
+                let id = config.experiment_id.to_string();
+                let log_path = out.join(&id).join("events.jsonl");
+                match ts_core::world_migration::run_world_migration_experiment(&config, &log_path) {
+                    Ok(result) => {
+                        let mut entry = serde_json::json!({
+                            "seed": seed,
+                            "experiment_id": id,
+                            "migration_id": result.migration.migration_id,
+                        });
+                        for d in &result.continuity.dimensions {
+                            entry[&d.name] = serde_json::json!(d.value);
+                            dim_series.entry(d.name.clone()).or_default().push(d.value);
+                        }
+                        for d in &result.effect.dimensions {
+                            dim_effect_series
+                                .entry(d.name.clone())
+                                .or_default()
+                                .push(d.value);
+                        }
+                        println!("seed {seed}: ok ({id})");
+                        per_seed.push(entry);
+                    }
+                    Err(e) => {
+                        println!("seed {seed}: FAILED ({e})");
+                        per_seed.push(serde_json::json!({
+                            "seed": seed,
+                            "error": e.to_string(),
+                        }));
+                    }
+                }
+            }
+
+            // mean ± population-sd per dimension.
+            let summarize = |series: &std::collections::BTreeMap<String, Vec<f32>>| {
+                let mut out_map = serde_json::Map::new();
+                for (name, values) in series {
+                    let n = values.len() as f64;
+                    let mean = values.iter().map(|v| *v as f64).sum::<f64>() / n;
+                    let var = values
+                        .iter()
+                        .map(|v| (*v as f64 - mean).powi(2))
+                        .sum::<f64>()
+                        / n;
+                    let sd = var.sqrt();
+                    out_map.insert(
+                        name.clone(),
+                        serde_json::json!({ "mean": mean, "sd": sd, "n": values.len() }),
+                    );
+                }
+                serde_json::Value::Object(out_map)
+            };
+
+            let sweep_summary = serde_json::json!({
+                "sweep_kind": "world_migration",
+                "backend": backend,
+                "llm_temperature": llm_temperature,
+                "ticks": ticks,
+                "cognition_interval": cognition_interval,
+                "seeds": seeds,
+                "per_seed": per_seed,
+                "continuity": summarize(&dim_series),
+                "effect": summarize(&dim_effect_series),
+            });
+            let pretty = serde_json::to_string_pretty(&sweep_summary).unwrap_or_default();
+            println!("{pretty}");
+            if let Some(path) = &summary {
+                if let Some(parent) = path.parent() {
+                    let _ = std::fs::create_dir_all(parent);
+                }
+                let _ = std::fs::write(path, format!("{pretty}\n"));
+                println!("summary written: {}", path.display());
             }
         }
         Commands::Replay { path } => match ts_core::replay::regenerate_metrics(&path) {

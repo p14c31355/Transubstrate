@@ -195,6 +195,14 @@ All notable changes to Transubstrate are documented here.
   rule calibration lag 0 stable; granite 0.3 2/5 adapt (lag 50-100,
   persist); temp 1.0 lag-0 switches separated from learning via the
   persistence flag; qwen 1/5 switch reverts
+- Selection-vs-drift correction: the PR#71 directional drift was a
+  MUTATION-RATCHET ARTIFACT — the mutation floor clamped at the parent
+  value made downward mutation structurally impossible; fixed to a
+  symmetric 3..100 band (ecology does the filtering); fitness
+  measurements show no threshold effect (sibling survival coin-flip,
+  birth-count corr −0.106); identified the turnover-vs-genome-efficacy
+  regime trade-off blocking a clean selection test (birth-stake redesign
+  queued)
 - Genome drift across generations (first genetic-transmission data):
   `EventPayload::BirthRecorded` logs every birth genome (the lineage
   tree was memory-only before); in the turnover equilibrium the

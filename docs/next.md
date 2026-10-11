@@ -107,6 +107,15 @@ the batch sweep runner all merged)
       probe 1.0 = overshoot-collapse-turnover (8→256→17, deaths 239,
       max generation 10-12 — first mutation accumulation across
       generations) (docs/experiments/move-density.md).
+- [x] Selection vs drift + mutation ratchet: PR#71 drift WITHDRAWN —
+      the PR#65 mutation floor clamped the lower bound at the parent's
+      value (downward mutation impossible; mechanical ratchet). Fixed to
+      symmetric 3..100. Fitness: NO threshold effect on survival
+      (within-family siblings 244/480 = coin flip; birth-count corr
+      −0.106). OPEN DESIGN PROBLEM: turnover needs probe 1.0 (which
+      decorrelates the genome) while genome efficacy needs probe 0.4
+      (which freezes births) — birth-stake redesign is the candidate
+      resolution (docs/experiments/selection-vs-drift.md).
 - [x] Genome drift over the 10-12-generation lineages: `BirthRecorded`
       event added (birth genomes now live in the event log);
       division_threshold drifts UPWARD 6.0 → 7.4-9.9 in 5/5 seeds

@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-10-11 (M8 merged)
+Last updated: 2026-10-11 (PR#12 merged — selection measurement)
 
 ## What currently works (all OBSERVED, verified on this repository's CI + local runs)
 
@@ -48,6 +48,11 @@ Last updated: 2026-10-11 (M8 merged)
   continuity 0.10, control continuity 1.00, migration effect −0.90. LLM
   rationales are observation-dependent (e.g. "Energy low, no resources to
   absorb" vs "Emit signal to communicate").
+- **Scarcity/selection instrument (PR#11, PR#12)**: multi-seed drift
+  measurement and two-phenotype competition. Negative result at default
+  mutation (drift +0.0006, below ±0.02 band); positive selection measured
+  via direct phenotype competition (shareA 0.759, 5/5 seeds, mechanism
+  confirmed). regen=0 → extinction.
 - **CLI**: `run-test`, `run-primordial`, `run-migration`, `replay`,
   `verify`, `inspect`. Backends: echo, random, energy-rule,
   reproducing-rule, `llm:<model>`.
@@ -74,8 +79,9 @@ Last updated: 2026-10-11 (M8 merged)
 - No emergence claims of any kind. No signaling conventions have formed or
   been detected (the signal field works mechanically; no experiment has yet
   tested convention formation).
-- No evolution claims: mutation machinery exists, but no selection pressure
-  experiment has shown trait frequency changes across generations.
+- "Evolution" remains unclaimed: selection on one engineered trait
+  (absorb_affinity) is now MEASURED (PR#12: share 0.759, 5/5 seeds), but no
+  open-ended evolution, speciation, or niche formation has been tested.
 - No memory-retention continuity: the LLM path has no per-subject memory yet;
   the M8 continuity measures behavioral distribution only.
 - No world migration (second world) yet.
@@ -95,6 +101,6 @@ Last updated: 2026-10-11 (M8 merged)
 
 ## Verification status
 
-- 66 unit tests passing; fmt + clippy -D warnings clean.
-- CI green on all merged PRs (#1–#9).
-- Real release-build CLI runs recorded in PR descriptions (#3, #4, #5, #8, #9).
+- 74 unit tests passing; fmt + clippy -D warnings clean.
+- CI green on all merged PRs (#1–#12).
+- Real release-build CLI runs recorded in PR descriptions (#3, #4, #5, #8, #9, #11, #12).

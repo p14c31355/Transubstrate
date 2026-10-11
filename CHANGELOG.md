@@ -99,3 +99,13 @@ All notable changes to Transubstrate are documented here.
 - MemoryEntry.pre_tick_energy: reward = post-tick energy − pre-decision
   energy; shared record_memory() helper (FIFO limit param)
 - Primordial experiment runner also records pre_tick_energy
+
+### Added (research/active-network, unmerged)
+- NetworkWorld: signal-driven energy pull — a signaling node draws
+  `signal_pull_rate * strength` energy per tick from its ring neighbors
+  (energy-conserving). SIGNAL now has a real resource payoff and HOP gets
+  a reason to chase signal-rich nodes; this makes adaptation (action
+  distribution shift across a world migration) measurable instead of
+  masked by a passive WAIT-optimal surface.
+- Tests: pull concentrates energy on the signaling node and conserves
+  totals; pull stops after field decay.

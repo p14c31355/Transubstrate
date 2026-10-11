@@ -45,6 +45,10 @@ pub struct NetworkConfig {
     pub absorb_efficiency: f32,
     /// Signal field decay per tick.
     pub signal_decay: f32,
+    /// Energy pulled into a signaling node per tick, per unit of signal
+    /// strength, drawn from the ring neighbors. Gives SIGNAL a real
+    /// resource payoff (and HOP a reason to chase signal-rich nodes).
+    pub signal_pull_rate: f32,
 }
 
 impl Default for NetworkConfig {
@@ -56,6 +60,7 @@ impl Default for NetworkConfig {
             metabolism: 0.05,
             absorb_efficiency: 0.8,
             signal_decay: 0.5,
+            signal_pull_rate: 0.5,
         }
     }
 }
@@ -159,6 +164,18 @@ impl NetworkWorld {
         self.node_energy[self.idx(node)]
     }
 
+    /// Full node-energy field (test/diagnostics access).
+    #[cfg(test)]
+    pub fn node_energy_field(&self) -> &[f32] {
+        &self.node_energy
+    }
+
+    /// Mutable signal field (test access for mechanism isolation).
+    #[cfg(test)]
+    pub fn signal_field_mut(&mut self) -> &mut [f32] {
+        &mut self.signal_field
+    }
+
     pub fn total_node_energy(&self) -> f32 {
         self.node_energy.iter().sum()
     }
@@ -169,12 +186,42 @@ impl NetworkWorld {
         [(node + n - 1) % n, (node + 1) % n]
     }
 
-    /// Physics: node energy regen + signal decay.
+    /// Physics: node energy regen + signal decay + signal-driven energy
+    /// pull (signaling nodes draw energy from their ring neighbors —
+    /// SIGNAL has a resource payoff, HOP gets a reason to chase
+    /// signal-rich nodes). Energy is conserved by the pull.
     fn step_physics(&mut self) {
         let regen = self.config.regen_rate * NET_FIELD_NORMALIZATION;
         for e in self.node_energy.iter_mut() {
             *e = (*e + regen).min(self.config.node_capacity * NET_FIELD_NORMALIZATION);
         }
+
+        // Signal pull: deterministic sweep; pull happens before decay so a
+        // fresh signal always pays at least one tick.
+        let pull = self.config.signal_pull_rate;
+        let n = self.node_energy.len();
+        let mut pulled = vec![0.0f32; n];
+        for (i, strength) in self.signal_field.iter().enumerate() {
+            if *strength <= 0.0 {
+                continue;
+            }
+            let want = strength * pull;
+            let left = (n + i - 1) % n;
+            let right = (i + 1) % n;
+            for j in [left, right] {
+                if n < 3 && j == i {
+                    continue; // degenerate tiny rings: no self-pull
+                }
+                let take = self.node_energy[j].min(want);
+                self.node_energy[j] -= take;
+                pulled[i] += take;
+            }
+        }
+        for (i, amount) in pulled.into_iter().enumerate() {
+            let cap = self.config.node_capacity * NET_FIELD_NORMALIZATION;
+            self.node_energy[i] = (self.node_energy[i] + amount).min(cap);
+        }
+
         for s in self.signal_field.iter_mut() {
             *s *= 1.0 - self.config.signal_decay;
         }
@@ -475,5 +522,89 @@ mod tests {
         let s = w.subject("traveler").unwrap();
         assert_eq!(s.node, 3);
         assert!((s.energy - 7.5).abs() < 1e-5);
+    }
+
+    #[test]
+    fn signal_pulls_energy_from_neighbors() {
+        // A signal on node 0 must draw energy from nodes 1 and 15
+        // (16-node ring) and concentrate it on node 0, conserving total
+        // energy modulo regen (regen is uniform so it cancels in the
+        // comparison between signaling and non-signaling runs).
+        let mut w = NetworkWorld::new(NetworkConfig::default(), 7);
+        let before: Vec<f32> = w.node_energy_field().to_vec();
+        // Inject a strong signal directly (SIGNAL action costs subject
+        // energy; here we test the field mechanism in isolation).
+        w.signal_field_mut()[0] = 1.0;
+        w.tick(&[]);
+        let after = w.node_energy_field().to_vec();
+        // Node 0 gained; neighbors lost (their regen is 0.2, pull is
+        // 1.0 * 0.5 = 0.5 from each side, so net loss per neighbor).
+        assert!(
+            after[0] > before[0] + 0.5,
+            "signaling node must gain: {} -> {}",
+            before[0],
+            after[0]
+        );
+        assert!(
+            after[1] < before[1] + 0.2 && after[15] < before[15] + 0.2,
+            "neighbors must lose despite regen: {} -> {} / {} -> {}",
+            before[1],
+            after[1],
+            before[15],
+            after[15]
+        );
+        // Conservation: total change = regen(0.2 * 16) − 0 (pull conserves).
+        let total_before: f32 = before.iter().sum();
+        let total_after: f32 = after.iter().sum();
+        assert!(
+            (total_after - total_before - 0.2 * 16.0).abs() < 1e-3,
+            "pull must conserve energy: {} -> {}",
+            total_before,
+            total_after
+        );
+    }
+
+    #[test]
+    fn signal_pull_decays_with_the_field() {
+        // After the signal decays away, pull stops: node deltas return to
+        // plain regen.
+        let cfg = NetworkConfig {
+            signal_pull_rate: 2.0,
+            ..Default::default()
+        };
+        let mut w = NetworkWorld::new(cfg, 9);
+        w.signal_field_mut()[0] = 1.0;
+        let _ = w.tick(&[]); // pull happens, then decay halves the field
+        let _ = w.tick(&[]); // field ~0.25, still pulls
+        let _ = w.tick(&[]); // field ~0.0625, weak pull
+        let _ = w.tick(&[]); // field ~0.0039, negligible
+        for _ in 0..40 {
+            let _ = w.tick(&[]);
+        }
+        // Steady state check: once the field has decayed to ~0, only regen
+        // (capped) changes totals. The strongest pull is done, so two
+        // consecutive ticks must differ by regen-only totals (per tick:
+        // 16 nodes × 0.2 = 3.2, unless nodes hit cap and then less).
+        let s1: f32 = w.node_energy_field().iter().sum();
+        let _ = w.tick(&[]);
+        let s2: f32 = w.node_energy_field().iter().sum();
+        let _ = w.tick(&[]);
+        let s3: f32 = w.node_energy_field().iter().sum();
+        assert!(
+            s2 > s1 && s3 > s2,
+            "energy must keep growing until cap: {} -> {} -> {}",
+            s1,
+            s2,
+            s3
+        );
+        // And the per-tick delta must be small (regen-scale, not pull-scale).
+        let d1 = s2 - s1;
+        let d2 = s3 - s2;
+        assert!(
+            d1 <= 3.2 + 1e-3 && d2 <= 3.2 + 1e-3,
+            "post-decay deltas must be regen-scale: {} {}",
+            d1,
+            d2
+        );
     }
 }

@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-10-11 (PR#40 merged — temperature sweep: temp 0.3 dominates 0.7)
+Last updated: 2026-10-11 (PR#44 merged — memory_usage in both harnesses)
 
 ## What currently works (all OBSERVED, verified on this repository's CI + local runs)
 
@@ -64,10 +64,13 @@ Last updated: 2026-10-11 (PR#40 merged — temperature sweep: temp 0.3 dominates
   (FIFO), wired into the primordial population runner, the model-migration
   harness, AND across the world-migration boundary — memory belongs to the
   subject, not the backend or the world. LLM decisions receive the buffer.
-- **memory_retention continuity dimension (PR#24)**: fourth ContinuityVector
-  dimension — multiset match of (action, reward-bin) keys across the
-  migration boundary. Calibration: echo→echo 1.0, rule→echo 0.0,
-  consistent with the behavioral dimension.
+- **memory_retention + memory_usage continuity dimensions (PR#24, #42, #44)**:
+  five-dimension ContinuityVector. memory_retention = multiset match of
+  (action, reward-bin) keys across the swap (echo→echo 1.0, rule→echo 0.0);
+  memory_usage = fraction of boundary-remembered actions re-enacted
+  post-swap, immune to FIFO roll-off. Wired into BOTH harnesses; world-
+  migration calibration: signal-seeker usage 0.5 (SIGNAL→ABSORB strategy
+  flip re-enacted half its boundary memory), control 1.0, effect −0.5.
 - **CLI**: `run-test`, `run-primordial`, `run-migration`, `run-world-migration`,
   `benchmark`, `replay`, `verify`, `inspect`. Backends: echo, random,
   energy-rule, reproducing-rule, `llm:<model>`.
@@ -131,8 +134,9 @@ Last updated: 2026-10-11 (PR#40 merged — temperature sweep: temp 0.3 dominates
   via outcome learning at temp 0.7 (PR#37), not via manifest-channel
   adaptation.
 - Memory USE after a swap is OBSERVED at temp 0.7 (learning loop) but not
-  yet at temperature 0, and not yet tied to the memory_retention dimension
-  (FIFO roll-off masks it).
+  yet at temperature 0; the memory_usage dimension now measures it, but
+  LLM-run usage numbers have not yet been recorded (rule/echo calibrations
+  only so far).
 - No machine/process migration yet.
 - Multi-seed statistics exist for the rule→LLM migration (5 seeds),
   PR#12 competition (5 seeds), the LLM world migration (5 seeds), outcome

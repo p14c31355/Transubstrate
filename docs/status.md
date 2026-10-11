@@ -139,6 +139,15 @@ Last updated: 2026-10-11 (PR#52-#57 arc — memory ablation, signaling economics
   under the identical harness — post-migration behavior is model-dependent.
 - LLM integration (M7): granite4.1:3b-q4_K_M produced valid typed decisions
   in 80/80 cognition events on the reference GPU; zero schema rejections.
+- Stabilizing selection (FIRST measured fitness landscape, n=5 seeds,
+  1240 birth genomes): reproduction rate by division threshold peaks at
+  the founder value 8 (0.388), threshold 11+ is STERILE (0/10 — energy
+  cap edge), threshold 5 depressed (0.175 — collapse-regime edge);
+  humped curve = stabilizing selection with a hard upper edge from the
+  energy cap. Distribution migration (founder 5.0) NOT DETECTED in 12
+  generations — the gradient is real but migration speed is bounded by
+  mutation variance (sigma ~1 vs peak distance 3-4) (stabilizing-
+  selection.md).
 - Mutation-ratchet correction (selection-vs-drift.md): PR#71's
   directional drift was a MUTATION-OPERATOR ARTIFACT — the PR#65 floor
   fix clamped the lower mutation bound at the parent's value (downward

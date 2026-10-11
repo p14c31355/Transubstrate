@@ -107,6 +107,14 @@ the batch sweep runner all merged)
       probe 1.0 = overshoot-collapse-turnover (8→256→17, deaths 239,
       max generation 10-12 — first mutation accumulation across
       generations) (docs/experiments/move-density.md).
+- [x] Stabilizing selection measured + migration test: reproduction
+      rate by threshold is humped (peak 0.388 at the founder value 8;
+      th 11+ STERILE at the energy cap — 0/10; th 5 depressed 0.175);
+      founder-5.0 migration test NEGATIVE at 12 generations (means
+      wander 3.6-5.9, no climb) — the gradient is real, the shift is
+      bounded by mutation variance; next lever: longer runs, narrower
+      mutation band, or steeper landscape
+      (docs/experiments/stabilizing-selection.md).
 - [x] Selection vs drift + mutation ratchet: PR#71 drift WITHDRAWN —
       the PR#65 mutation floor clamped the lower bound at the parent's
       value (downward mutation impossible; mechanical ratchet). Fixed to

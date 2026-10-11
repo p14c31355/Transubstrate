@@ -131,7 +131,6 @@ fn run_phase(
         if cadence.fires_on(tick) {
             // Single-subject: find the living organism.
             if let Some(org) = world.organism(subject_id) {
-                let pre_energy = org.energy;
                 let sref = SubjectRef {
                     subject_id: subject_id.to_string(),
                     pos: org.pos,

@@ -58,8 +58,8 @@ fail-safe path working as designed (Goal §9: malformed output fails safely).
 | seed | pre actions | post actions | behavioral |
 |------|------------|--------------|------------|
 | 42   | {ABSORB 2, WAIT 38} | {WAIT 40} | 0.95 |
-| 7    | {ABSORB 40} | {SIGNAL 39, ABSORB 1} | (learned SIGNAL) |
-| 99   | {ABSORB 39, WAIT 1} | {SIGNAL 40} | (learned SIGNAL) |
+| 7    | {ABSORB 40} | {SIGNAL 39, ABSORB 1} | 0.025 (learned SIGNAL) |
+| 99   | {ABSORB 39, WAIT 1} | {SIGNAL 40} | 0.0 (learned SIGNAL) |
 | 123  | — | — | FAIL: schema violation `ABSORBT` |
 | 2026 | {ABSORB 2, WAIT 38} | {WAIT 40} | 0.95 |
 

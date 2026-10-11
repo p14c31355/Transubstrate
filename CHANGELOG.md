@@ -195,6 +195,13 @@ All notable changes to Transubstrate are documented here.
   rule calibration lag 0 stable; granite 0.3 2/5 adapt (lag 50-100,
   persist); temp 1.0 lag-0 switches separated from learning via the
   persistence flag; qwen 1/5 switch reverts
+- Stabilizing selection (first measured fitness landscape): founder
+  8.0 + probe 1.0 turnover runs — reproduction rate by threshold peaks
+  at 8 (0.388), threshold 11+ is sterile at the energy cap (0/10),
+  threshold 5 depressed (0.175) — a humped stabilizing-selection curve
+  produced by resource economics alone (no programmed fitness);
+  founder-5.0 distribution migration NOT detected in 12 generations
+  (gradient real, speed bounded by mutation variance — quantified)
 - Selection-vs-drift correction: the PR#71 directional drift was a
   MUTATION-RATCHET ARTIFACT — the mutation floor clamped at the parent
   value made downward mutation structurally impossible; fixed to a

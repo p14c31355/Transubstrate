@@ -116,10 +116,13 @@ impl LlmBackend {
         }
         let mut mem = String::new();
         for m in ctx.memory.iter().rev().take(5) {
+            // Include the observed outcome (reward) with each past decision:
+            // the model can learn which numeric observations precede good
+            // outcomes without any human-assigned channel meaning.
             let _ = writeln!(
                 mem,
-                "tick {}: {}{:?}",
-                m.tick, m.action.name, m.action.params
+                "tick {}: {}{:?} (outcome {:+.3})",
+                m.tick, m.action.name, m.action.params, m.reward_signal
             );
         }
         format!(

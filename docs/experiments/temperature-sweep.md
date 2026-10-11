@@ -1,7 +1,8 @@
 # Temperature Sweep — Outcome Learning vs Temperature
 
-Status: OBSERVED (n=5 per temperature; temperatures 0.7 and 0.3; single
-model). Batch-collected with `sweep-world-migration` (PR#39).
+Status: OBSERVED (n=5 per temperature at 0.7; n=5 at 0.3; n=4 valid + 1
+schema-rejected at 1.0; single model). Temp 0.7 hand-collected; 0.3 and 1.0
+batch-collected with `sweep-world-migration` (PR#39).
 Date: 2026-10-11
 Extends: docs/experiments/outcome-exploration.md (temp 0.7)
 
@@ -46,6 +47,38 @@ Temp 0.3 (this sweep, n=5, ZERO deaths):
 - Adaptation post-swap (ABSORB → SIGNAL under the new world's payoff) is
   now observed in 3/5 seeds at the lower temperature — the strongest
   adaptation evidence so far, with no deaths.
+
+## TEMP 1.0 (added after the first record; n=4 valid + 1 schema-rejected)
+
+Batch-collected with the sweep runner. One seed (123) PROPOSED A TYPO
+("ABSORBT") — rejected by WABIX schema validation, experiment failed fast;
+the sweep runner recorded the error per-seed and continued. This is the
+fail-safe path working as designed (Goal §9: malformed output fails safely).
+
+| seed | pre actions | post actions | behavioral |
+|------|------------|--------------|------------|
+| 42   | {ABSORB 2, WAIT 38} | {WAIT 40} | 0.95 |
+| 7    | {ABSORB 40} | {SIGNAL 39, ABSORB 1} | (learned SIGNAL) |
+| 99   | {ABSORB 39, WAIT 1} | {SIGNAL 40} | (learned SIGNAL) |
+| 123  | — | — | FAIL: schema violation `ABSORBT` |
+| 2026 | {ABSORB 2, WAIT 38} | {WAIT 40} | 0.95 |
+
+Sweep summary (n=4 valid): behavioral 0.481 ± 0.469, memory_retention
+0.5 ± 0.5, effect −0.494 ± 0.457 — the widest spread of any temperature,
+consistent with high temperature destabilizing policies in both directions
+(two conservative, two SIGNAL-adopters, one malformed).
+
+## REFINED INTERPRETATION ACROSS TEMPERATURES
+
+- Learning incidence (post-swap SIGNAL adoption): 2/5 at 0.7, 3/5 at 0.3,
+  2/4 valid at 1.0 — no monotonic trend; temp 0.3 remains the best
+  learning-per-death trade-off (0 deaths).
+- Failure modes differ by temperature: at 0.7 failures are energy deaths
+  (SIGNAL cost spirals); at 1.0 the observed failure is malformed output
+  (schema rejection) — a qualitatively different risk profile.
+- The schema-rejection case doubles as the first OBSERVED fail-safe
+  demonstration in an LLM migration experiment: invalid output never
+  reached the world.
 
 ## CAVEATS
 

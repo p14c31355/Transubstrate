@@ -22,7 +22,7 @@ kept, and nothing here claims emergence.
 | 13 | Cross-model migration (granite vs qwen) | docs/experiments/cross-model-migration.md | OBSERVED (n=5 each: behavioral 0.75 vs 0.00 — temperature-0 tie broken; post-migration behavior is model-dependent) |
 | 14 | Signal-driven energy pull (network world) | docs/experiments/signal-pull.md | OBSERVED (signal-seeker flips SIGNAL→ABSORB across the boundary; engineered payoff, not emergence) |
 | 15 | Outcome-driven exploration (temp 0.7, signal pull) | docs/experiments/outcome-exploration.md | OBSERVED (2/5 seeds learned SIGNAL from outcome-visible memory; 1 seed adapted post-swap; fragility documented) |
-| 16 | Temperature sweep (outcome learning vs temp) | docs/experiments/temperature-sweep.md | OBSERVED (n=5/temp: temp 0.3 dominates 0.7 — 3/5 learning, 0 deaths; bimodal behavioral 0.65±0.314) |
+| 16 | Temperature sweep (outcome learning vs temp) | docs/experiments/temperature-sweep.md | OBSERVED (0.3: 3/5 learning, 0 deaths; 0.7: 2/5, 2 deaths; 1.0: 2/4 valid, 1 schema-rejection — fail-safe OBSERVED) |
 
 ## Running an experiment
 

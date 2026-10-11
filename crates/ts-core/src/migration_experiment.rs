@@ -23,7 +23,7 @@
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
-use crate::cognition::{CognitionBackend, CognitionError, DecisionContext};
+use crate::cognition::{CognitionBackend, CognitionError, DecisionContext, record_memory};
 use crate::continuity::{ActionCollector, ContinuityDimension, ContinuityVector, MigrationEvent};
 use crate::event_log::{EventLog, EventPayload};
 use crate::ids::{ExperimentId, SubjectId};
@@ -117,6 +117,8 @@ fn run_phase(
     ledger: &mut ResourceLedger,
     log: &mut EventLog,
     collector: &mut ActionCollector,
+    memory: &mut Vec<crate::cognition::MemoryEntry>,
+    memory_limit: usize,
 ) -> Result<PhaseMeasurement, CognitionError> {
     let tick_from = tick_offset;
     let tick_to = tick_offset + ticks;
@@ -146,7 +148,7 @@ fn run_phase(
                     energy: sref.energy,
                     observations,
                     manifest: world.manifest().clone(),
-                    memory: vec![],
+                    memory: memory.clone(),
                 };
                 let decision = backend.decide(&ctx)?;
                 crate::cognition::validate_decision(world.manifest(), &decision)?;
@@ -167,14 +169,29 @@ fn run_phase(
                 if let Some(action) = decision.action {
                     collector.record(Some(&action.name));
                     actions_taken += 1;
-                    actions.push((subject_id.to_string(), action));
+                    actions.push((subject_id.to_string(), action.clone()));
+                    record_memory(memory, tick, Some(&action), sref.energy, memory_limit);
                 } else {
                     collector.record(None);
+                    record_memory(memory, tick, None, sref.energy, memory_limit);
                 }
             }
         }
 
         let _events = world.tick(&actions);
+
+        // Reward wiring: energy delta from pre-decision energy.
+        if cadence.fires_on(tick) {
+            let updated = world.organism(subject_id).and_then(|org| {
+                memory
+                    .last_mut()
+                    .filter(|last| last.reward_signal == 0.0)
+                    .map(|last| {
+                        last.reward_signal = org.energy - last.pre_tick_energy_hint();
+                    })
+            });
+            let _ = updated;
+        }
     }
 
     let survived = world.organism(subject_id).is_some();
@@ -241,6 +258,11 @@ pub fn run_migration_experiment(
     let mut ledger = ResourceLedger::new(4096);
     let mut collector_a = ActionCollector::new();
     let mut collector_b = ActionCollector::new();
+    // Per-subject bounded memory persists ACROSS the migration boundary —
+    // this is the whole point: memory belongs to the subject, not the
+    // backend (SUBJECT != MODEL).
+    let mut memory: Vec<crate::cognition::MemoryEntry> = Vec::new();
+    const MEMORY_LIMIT: usize = 8;
 
     let mut backend_a = config.backend_a.instantiate();
     let phase_a = run_phase(
@@ -254,6 +276,8 @@ pub fn run_migration_experiment(
         &mut ledger,
         &mut log,
         &mut collector_a,
+        &mut memory,
+        MEMORY_LIMIT,
     )?;
 
     // Record the migration event at the midpoint.
@@ -287,6 +311,8 @@ pub fn run_migration_experiment(
         &mut ledger,
         &mut log,
         &mut collector_b,
+        &mut memory,
+        MEMORY_LIMIT,
     )?;
 
     let migration_run = RunResult {
@@ -306,6 +332,7 @@ pub fn run_migration_experiment(
     let mut ledger_a = ResourceLedger::new(4096);
     let mut collector_ca1 = ActionCollector::new();
     let mut collector_ca2 = ActionCollector::new();
+    let mut memory_a: Vec<crate::cognition::MemoryEntry> = Vec::new();
     let mut ctrl_backend_a = config.backend_a.instantiate();
     let ctrl_a_phase1 = run_phase(
         &mut world_a,
@@ -318,6 +345,8 @@ pub fn run_migration_experiment(
         &mut ledger_a,
         &mut log,
         &mut collector_ca1,
+        &mut memory_a,
+        MEMORY_LIMIT,
     )?;
     let ctrl_a_phase2 = run_phase(
         &mut world_a,
@@ -330,6 +359,8 @@ pub fn run_migration_experiment(
         &mut ledger_a,
         &mut log,
         &mut collector_ca2,
+        &mut memory_a,
+        MEMORY_LIMIT,
     )?;
     let control_a = RunResult {
         run_kind: "control_a".into(),
@@ -344,6 +375,7 @@ pub fn run_migration_experiment(
     let mut ledger_b = ResourceLedger::new(4096);
     let mut collector_cb1 = ActionCollector::new();
     let mut collector_cb2 = ActionCollector::new();
+    let mut memory_b: Vec<crate::cognition::MemoryEntry> = Vec::new();
     let mut ctrl_backend_b = config.backend_b.instantiate();
     let ctrl_b_phase1 = run_phase(
         &mut world_b,
@@ -356,6 +388,8 @@ pub fn run_migration_experiment(
         &mut ledger_b,
         &mut log,
         &mut collector_cb1,
+        &mut memory_b,
+        MEMORY_LIMIT,
     )?;
     let ctrl_b_phase2 = run_phase(
         &mut world_b,
@@ -368,6 +402,8 @@ pub fn run_migration_experiment(
         &mut ledger_b,
         &mut log,
         &mut collector_cb2,
+        &mut memory_b,
+        MEMORY_LIMIT,
     )?;
     let control_b = RunResult {
         run_kind: "control_b".into(),

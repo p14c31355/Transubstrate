@@ -33,6 +33,9 @@ pub struct MemoryEntry {
     pub tick: u64,
     pub action: Action,
     pub reward_signal: f32,
+    /// Energy at decision time (reward = post-tick energy − this).
+    #[serde(default)]
+    pub pre_tick_energy: f32,
 }
 
 /// Backend output: a typed decision.
@@ -65,6 +68,35 @@ pub trait CognitionBackend {
     /// One bounded decision. Implementations must be deterministic under
     /// the same context unless they document their randomness policy.
     fn decide(&mut self, ctx: &DecisionContext) -> Result<Decision, CognitionError>;
+}
+
+/// Append a decision to bounded memory (M11 helper shared by runners).
+pub fn record_memory(
+    memory: &mut Vec<MemoryEntry>,
+    tick: u64,
+    action: Option<&Action>,
+    pre_tick_energy: f32,
+    limit: usize,
+) {
+    if memory.len() >= limit {
+        memory.remove(0);
+    }
+    memory.push(MemoryEntry {
+        tick,
+        action: action.cloned().unwrap_or(Action {
+            name: "WAIT".into(),
+            params: vec![],
+        }),
+        reward_signal: 0.0,
+        pre_tick_energy,
+    });
+}
+
+impl MemoryEntry {
+    /// Reward wiring hint: post-tick energy minus pre-tick energy.
+    pub fn pre_tick_energy_hint(&self) -> f32 {
+        self.pre_tick_energy
+    }
 }
 
 /// Consumes resources for one cognition event.

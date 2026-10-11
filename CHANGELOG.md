@@ -92,3 +92,10 @@ All notable changes to Transubstrate are documented here.
 - Measured on reference machine: ~139k ticks/s (1 org), ~130k (8 orgs),
   ~84k (32 orgs), mock decisions ~5.8M/s, peak host RAM ~3.4 MiB,
   ~315KB log per 1000 ticks (8 orgs)
+
+### Added (feat/migration-memory, unmerged)
+- Migration harness now carries per-subject bounded memory ACROSS the
+  migration boundary (memory belongs to the subject, not the backend)
+- MemoryEntry.pre_tick_energy: reward = post-tick energy − pre-decision
+  energy; shared record_memory() helper (FIFO limit param)
+- Primordial experiment runner also records pre_tick_energy

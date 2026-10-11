@@ -580,17 +580,32 @@ fn main() {
             };
             let id = config.experiment_id.to_string();
             let log_path = out.join(&id).join("events.jsonl");
-            match ts_core::world_migration::run_world_migration(&config, &log_path) {
-                Ok(vector) => {
+            match ts_core::world_migration::run_world_migration_experiment(&config, &log_path) {
+                Ok(result) => {
                     println!("experiment: {}", config.experiment_id);
                     println!("backend:    {backend}");
                     println!("ticks:      {ticks}");
-                    for d in &vector.dimensions {
-                        println!("continuity {}: {:.4}", d.name, d.value);
-                        println!("  computation: {}", d.computation);
+                    println!(
+                        "migration:  {} {} -> {} at tick {}",
+                        result.migration.migration_id,
+                        result.migration.from,
+                        result.migration.to,
+                        result.migration.tick
+                    );
+                    println!("migration run:");
+                    for d in &result.continuity.dimensions {
+                        println!("  continuity {}: {:.4}", d.name, d.value);
+                        println!("    computation: {}", d.computation);
                     }
-                    if let Some(mid) = &vector.migration_id {
-                        println!("migration id: {mid}");
+                    println!("control run (no swap):");
+                    for d in &result.control_continuity.dimensions {
+                        println!("  continuity {}: {:.4}", d.name, d.value);
+                        println!("    computation: {}", d.computation);
+                    }
+                    println!("migration effect (migration - control):");
+                    for d in &result.effect.dimensions {
+                        println!("  {}: {:+.4}", d.name, d.value);
+                        println!("    computation: {}", d.computation);
                     }
                     println!("event log: {}", log_path.display());
                 }

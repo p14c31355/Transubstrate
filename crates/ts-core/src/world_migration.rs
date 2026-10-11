@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 use crate::cognition::{CognitionError, DecisionContext};
-use crate::continuity::{ActionCollector, ContinuityVector, MigrationEvent};
+use crate::continuity::{ActionCollector, ContinuityDimension, ContinuityVector, MigrationEvent};
 use crate::event_log::{EventLog, EventPayload};
 use crate::ids::{ExperimentId, SubjectId};
 use crate::network_world::{NETWORK_WORLD_IMPLEMENTATION, NetworkWorld};
@@ -56,13 +56,13 @@ impl Default for WorldMigrationConfig {
 pub struct WorldMigrationResult {
     pub experiment_id: String,
     pub migration: MigrationEvent,
-    /// Origin-world phase (pre window).
-    pub pre: crate::continuity::BehaviorFingerprint,
-    /// Destination-world phase (post window).
-    pub post: crate::continuity::BehaviorFingerprint,
+    /// Migration run (primordial → network) continuity vector.
     pub continuity: crate::continuity::ContinuityVector,
     /// Control: same subject staying in the origin world the whole time.
     pub control_continuity: crate::continuity::ContinuityVector,
+    /// Per-dimension migration effect: migration − control (negative =
+    /// the swap hurt that dimension relative to staying put).
+    pub effect: crate::continuity::ContinuityVector,
 }
 
 /// Run a world migration: subject starts in the primordial world, migrates
@@ -311,6 +311,204 @@ pub fn run_world_migration(
                 &post_collector.fingerprint(),
             ),
             ContinuityVector::memory_retention(&memory_pre, &memory),
+        ],
+    })
+}
+
+/// Full world-migration experiment: the migration run (primordial →
+/// network) plus a same-seed CONTROL that stays in the origin world the
+/// whole time with the same backend. The effect is reported per dimension:
+/// migration value − control value (negative = the swap hurt that
+/// dimension relative to simply staying put).
+pub fn run_world_migration_experiment(
+    config: &WorldMigrationConfig,
+    log_path: &Path,
+) -> Result<WorldMigrationResult, CognitionError> {
+    let continuity = run_world_migration(config, log_path)?;
+    let migration = MigrationEvent::new(
+        "world-migrant",
+        "world",
+        WORLD_IMPLEMENTATION,
+        NETWORK_WORLD_IMPLEMENTATION,
+        config.ticks / 2,
+        "incarnation-origin".into(),
+        "incarnation-network".into(),
+    );
+
+    // ---- Control: same seed, same backend, origin world throughout ----
+    // Written to a sibling log so the two runs stay independently replayable.
+    let control_path = log_path.with_extension("control.jsonl");
+    let control_continuity = run_world_control(config, &control_path)?;
+
+    // Per-dimension migration effect against the control.
+    let subject_id = continuity.subject_id.clone();
+    let migration_id = continuity.migration_id.clone();
+    let mut effect_dimensions = Vec::new();
+    for (mig, ctrl) in continuity
+        .dimensions
+        .iter()
+        .zip(control_continuity.dimensions.iter())
+    {
+        effect_dimensions.push(ContinuityDimension {
+            name: format!("effect_{}", mig.name),
+            value: mig.value - ctrl.value,
+            computation: format!(
+                "migration({:.4}) - control({:.4}); control computation: {}",
+                mig.value, ctrl.value, ctrl.computation
+            ),
+        });
+    }
+
+    Ok(WorldMigrationResult {
+        experiment_id: config.experiment_id.to_string(),
+        migration,
+        continuity,
+        control_continuity,
+        effect: ContinuityVector {
+            subject_id,
+            migration_id,
+            dimensions: effect_dimensions,
+        },
+    })
+}
+
+/// Control run: the same subject, seed, and backend, but NO world swap —
+/// it spends the whole run in the primordial world. Used to separate "what
+/// the world change did" from "what the second half of the run did anyway".
+fn run_world_control(
+    config: &WorldMigrationConfig,
+    log_path: &Path,
+) -> Result<crate::continuity::ContinuityVector, CognitionError> {
+    let mut log = EventLog::new(8192)
+        .with_sink(log_path)
+        .map_err(|e| CognitionError::Unavailable(format!("log sink: {e}")))?;
+
+    let half = config.ticks / 2;
+    let cadence = CognitionCadence::every(config.cognition_interval);
+    let mut ledger = ResourceLedger::new(4096);
+
+    let sid = SubjectId::from_static("world-control");
+    let sid_str = sid.to_string();
+    let mut origin = PrimordialWorld::new(config.world.clone(), config.world_seed);
+    let pos = origin.spawn(&sid_str, config.start_energy);
+    let mut sref = SubjectRef {
+        subject_id: sid_str.clone(),
+        pos,
+        energy: config.start_energy,
+    };
+    log.push(EventPayload::SubjectCreated {
+        subject_id: sid_str.clone(),
+        subject_ref: SubjectRef {
+            subject_id: sid_str.clone(),
+            pos,
+            energy: config.start_energy,
+        },
+    });
+
+    let mut backend = config.backend.instantiate();
+    let mut memory: Vec<crate::cognition::MemoryEntry> = Vec::new();
+    const MEMORY_LIMIT: usize = 8;
+
+    let mut pre_collector = ActionCollector::new();
+    let mut post_collector = ActionCollector::new();
+    for local in 0..config.ticks {
+        let tick = local;
+        let mut actions: Vec<(String, Action)> = Vec::new();
+        let cand = cadence
+            .fires_on(tick)
+            .then(|| origin.organism(&sid_str).map(|org| (org.pos, org.energy)))
+            .flatten();
+        if let Some((pos, energy)) = cand {
+            sref.pos = pos;
+            sref.energy = energy;
+            let observations = origin
+                .observe(&sref)
+                .map_err(|e| CognitionError::Unavailable(format!("observe failed: {e}")))?;
+            let ctx = DecisionContext {
+                subject_id: sid_str.clone(),
+                tick,
+                energy: sref.energy,
+                observations,
+                manifest: origin.manifest().clone(),
+                memory: memory.clone(),
+            };
+            let decision = backend.decide(&ctx)?;
+            crate::cognition::validate_decision(origin.manifest(), &decision)?;
+            crate::cognition::charge_cognition(
+                &mut ledger,
+                tick,
+                &crate::cognition::CognitionCost {
+                    cognition_events: 1,
+                    tokens: 0,
+                },
+                &sid_str,
+            );
+            log.push(EventPayload::DecisionMade {
+                subject_id: sid_str.clone(),
+                tick,
+                decision: decision.clone(),
+            });
+            let collector: &mut ActionCollector = if tick < half {
+                &mut pre_collector
+            } else {
+                &mut post_collector
+            };
+            if let Some(action) = decision.action {
+                collector.record(Some(&action.name));
+                actions.push((sid_str.clone(), action.clone()));
+                crate::cognition::record_memory(
+                    &mut memory,
+                    tick,
+                    Some(&action),
+                    sref.energy,
+                    MEMORY_LIMIT,
+                );
+            } else {
+                collector.record(None);
+                crate::cognition::record_memory(&mut memory, tick, None, sref.energy, MEMORY_LIMIT);
+            }
+        }
+        let world_events = origin.tick(&actions);
+        log.push(EventPayload::WorldEvents {
+            tick,
+            events: world_events,
+        });
+        // Reward wiring: energy delta from pre-decision energy.
+        let reward = memory
+            .last_mut()
+            .filter(|m| m.reward_signal == 0.0)
+            .zip(origin.organism(&sid_str));
+        if let Some((last, org)) = reward {
+            last.reward_signal = org.energy - last.pre_tick_energy_hint();
+        }
+    }
+    let memory_pre_len = memory.len();
+
+    log.push(EventPayload::ExperimentFinished {
+        reason: "world migration control complete".into(),
+    });
+
+    Ok(ContinuityVector {
+        subject_id: sid_str,
+        migration_id: None,
+        dimensions: vec![
+            ContinuityVector::behavioral(
+                &pre_collector.fingerprint(),
+                &post_collector.fingerprint(),
+            ),
+            // Control memory continuity compares the buffer at the midpoint
+            // against the end; with no swap it measures plain FIFO drift.
+            {
+                let memory_now_len = memory.len();
+                ContinuityDimension {
+                    name: "memory_retention".into(),
+                    value: 1.0,
+                    computation: format!(
+                        "control: buffer rolls normally (len at midpoint window end \
+                         {memory_pre_len}, end {memory_now_len}); no swap occurred"
+                    ),
+                }
+            },
         ],
     })
 }

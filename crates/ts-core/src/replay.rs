@@ -163,6 +163,24 @@ pub fn regenerate_from_records(records: &[EventRecord]) -> RegeneratedMetrics {
                 m.first_tick.get_or_insert(*tick);
                 m.last_tick = Some(*tick);
             }
+            // New-style population samples carry the REAL field energy.
+            EventPayload::PopulationSampled {
+                tick,
+                alive,
+                total_energy,
+                mean_energy,
+                field_energy,
+            } => {
+                m.population_samples.push(PopulationSample {
+                    tick: *tick,
+                    alive: *alive,
+                    total_energy: *total_energy,
+                    mean_energy: *mean_energy,
+                    field_energy: *field_energy,
+                });
+                m.first_tick.get_or_insert(*tick);
+                m.last_tick = Some(*tick);
+            }
             EventPayload::Migration { .. } => m.migrations += 1,
             EventPayload::ExperimentFinished { reason } => {
                 m.experiments_finished += 1;

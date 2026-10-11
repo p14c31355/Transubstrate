@@ -96,6 +96,15 @@ enum Commands {
         #[arg(long, default_value = "runs")]
         out: PathBuf,
     },
+    /// Run the two-phenotype competition experiment (research).
+    RunCompetition {
+        #[arg(long, default_value_t = 3000)]
+        ticks: u64,
+        #[arg(long, default_value_t = 8)]
+        pairs: u32,
+        #[arg(long, default_value = "42,7,99,123,2024")]
+        seeds: String,
+    },
     /// Regenerate metrics from an event log without re-running cognition (M6).
     Replay {
         /// Path to the events.jsonl file.
@@ -452,6 +461,62 @@ fn main() {
                 }
             }
             let _ = out;
+        }
+        Commands::RunCompetition {
+            ticks,
+            pairs,
+            seeds,
+        } => {
+            let seed_list: Vec<u64> = seeds
+                .split(',')
+                .filter_map(|s| s.trim().parse().ok())
+                .collect();
+            println!(
+                "{:>6} {:>6} {:>6} {:>8} {:>7} {:>7} {:>7} {:>7}",
+                "seed", "aliveA", "aliveB", "shareA", "birthA", "birthB", "deathA", "deathB"
+            );
+            let mut shares = Vec::new();
+            for seed in &seed_list {
+                let cfg = ts_core::competition::CompetitionConfig {
+                    world_seed: *seed,
+                    ticks,
+                    pairs,
+                    ..Default::default()
+                };
+                let r = ts_core::competition::run_competition(&cfg);
+                if let Some(share) = r.final_share_a {
+                    shares.push(share);
+                }
+                println!(
+                    "{:>6} {:>6} {:>6} {:>8.3} {:>7} {:>7} {:>7} {:>7}",
+                    seed,
+                    r.alive_a,
+                    r.alive_b,
+                    r.final_share_a.unwrap_or(f32::NAN),
+                    r.births_a,
+                    r.births_b,
+                    r.deaths_a,
+                    r.deaths_b
+                );
+            }
+            if !shares.is_empty() {
+                let mean: f32 = shares.iter().sum::<f32>() / shares.len() as f32;
+                println!(
+                    "mean shareA: {mean:.3} over {} seeds (0.5 = no advantage)",
+                    shares.len()
+                );
+                if mean > 0.65 {
+                    println!("SELECTION: high-affinity phenotype dominates");
+                } else if mean > 0.55 {
+                    println!("WEAK SELECTION: high-affinity phenotype favored");
+                } else if (0.45..=0.55).contains(&mean) {
+                    println!("NO ADVANTAGE (within 0.45-0.55 band)");
+                } else {
+                    println!("UNEXPECTED: low-affinity phenotype favored — investigate");
+                }
+            } else {
+                println!("extinction in all seeds — no comparison possible");
+            }
         }
         Commands::Replay { path } => match ts_core::replay::regenerate_metrics(&path) {
             Ok(m) => {

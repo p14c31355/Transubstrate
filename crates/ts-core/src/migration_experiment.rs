@@ -182,13 +182,15 @@ fn run_phase(
 
         // Reward wiring: energy delta from pre-decision energy.
         if cadence.fires_on(tick) {
-            if let Some(org) = world.organism(subject_id) {
-                if let Some(last) = memory.last_mut() {
-                    if last.reward_signal == 0.0 {
+            let updated = world.organism(subject_id).and_then(|org| {
+                memory
+                    .last_mut()
+                    .filter(|last| last.reward_signal == 0.0)
+                    .map(|last| {
                         last.reward_signal = org.energy - last.pre_tick_energy_hint();
-                    }
-                }
-            }
+                    })
+            });
+            let _ = updated;
         }
     }
 

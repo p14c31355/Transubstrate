@@ -86,9 +86,13 @@ the batch sweep runner all merged)
       responds to the rule emitter's signal at temp 0.3 (rule followers
       converge at 0.98+). Structure exists, behavior does not — honest
       negative recorded (docs/experiments/convention-formation.md).
-- [ ] Convention formation, temperature arm: repeat the 2-follower run at
-      temp 0.7 (migration runs showed outcome-learning there) and n=3
-      seeds; the null-signal attractor may be a temp-0.3 mode.
+- [x] Convention formation, temperature arm (temp 0.7, n=3 seeds): the
+      null-signal is TEMPERATURE-ROBUST (5/6 subject-seeds strength 0.0
+      only); seed 99 replicates the real-signal + emitter-convergence
+      pattern; convention formation not observed across 4 seeds × 2
+      temperatures — the world economy must couple received signals to
+      payoff, which would pre-define SIGNAL's meaning (trade-off made
+      explicit in the record).
 - [ ] Chemical-field meaning formation (the semantics-free substrate is
       still unused by controllers).
 - [ ] Carrying capacity: tune regen vs consumption so the field actually

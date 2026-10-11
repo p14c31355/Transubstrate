@@ -109,3 +109,15 @@ All notable changes to Transubstrate are documented here.
   masked by a passive WAIT-optimal surface.
 - Tests: pull concentrates energy on the signaling node and conserves
   totals; pull stops after field decay.
+
+### Added (research/active-network, unmerged)
+- NetworkWorld: signal-driven energy pull — a signaling node draws
+  `signal_pull_rate * strength` energy per tick from each ring neighbor
+  (energy-conserving, applied before field decay). SIGNAL now has a real
+  resource payoff and HOP gets a reason to chase signal-rich nodes.
+- SignalSeekerBackend (`signal-seeker`): positive control for the network
+  world — survive (ABSORB when local_energy low) -> seed the signal ->
+  harvest. Verified end-to-end: pre-world {SIGNAL 35, ABSORB 5} ->
+  post-world {ABSORB 40}, zero deaths.
+- Tests: pull concentrates energy on the signaling node, conserves totals
+  (modulo uniform regen), and stops after field decay.

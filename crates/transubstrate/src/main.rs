@@ -175,8 +175,11 @@ fn parse_primordial_backend(
             absorb_threshold: 0.3,
             divide_probe: 0.4,
         }),
+        "signal-seeker" => Ok(PB::SignalSeeker {
+            signal_threshold: 0.1,
+        }),
         other => Err(format!(
-            "unknown backend '{other}' (expected echo|random|energy-rule|reproducing-rule)"
+            "unknown backend '{other}' (expected echo|random|energy-rule|reproducing-rule|signal-seeker)"
         )),
     }
 }

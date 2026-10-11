@@ -29,8 +29,9 @@ exploration recorded)
       usage). Wired into BOTH harnesses; not masked by FIFO roll-off.
 - [ ] Cross-model outcome learning: does qwen3.5 (thinking-style, reasoning
       off) also learn SIGNAL from outcomes at temp>0?
-- [ ] Record memory_usage numbers for LLM runs (temp sweep re-run with the
-      5-dimension vector; rule/echo calibrations only so far).
+- [x] Record memory_usage numbers for LLM runs: temp-0.3 5-dimension sweep
+      (PR#47 record, n=5) — 4/5 usage 1.0 (swap-robust), 1 seed 0.0 across
+      all dimensions (full strategy replacement ABSORB→SIGNAL).
 
 ## 2. Research experiments
 

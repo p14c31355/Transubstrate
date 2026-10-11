@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-10-11 (M6 merged)
+Last updated: 2026-10-11 (M8 merged)
 
 ## What currently works (all OBSERVED, verified on this repository's CI + local runs)
 
@@ -36,8 +36,21 @@ Last updated: 2026-10-11 (M6 merged)
   controls, migration effect = migration continuity − control continuity.
 - **Replay**: metrics regeneration from event logs without re-running
   cognition; regenerated counts cross-validated against run summaries.
+- **Local LLM cognition backend (M7)**: LlmBackend over OpenAI-compatible
+  endpoints (Ollama / llama.cpp server); ONE shared instance serves the whole
+  population (VRAM does not scale with organism count); strict JSON decision
+  schema with safe failure; token accounting into the resource ledger; prompt
+  semantic-leakage scan as a unit test. Default model granite4.1:3b-q4_K_M
+  (2.1 GB), verified on the actual reference GPU (RTX 2070 SUPER 8GB,
+  local Ollama 0.23.2): 80 cognition events, 0 backend errors.
+- **Real model migration experiment (M8)**: energy-rule → local LLM at tick
+  200, measured with the M5 harness. Seeds 42/7/99 all show behavioral
+  continuity 0.10, control continuity 1.00, migration effect −0.90. LLM
+  rationales are observation-dependent (e.g. "Energy low, no resources to
+  absorb" vs "Emit signal to communicate").
 - **CLI**: `run-test`, `run-primordial`, `run-migration`, `replay`,
-  `verify`, `inspect`.
+  `verify`, `inspect`. Backends: echo, random, energy-rule,
+  reproducing-rule, `llm:<model>`.
 - **CI**: GitHub Actions — fmt, clippy -D warnings, tests, release build.
 
 ## What has been measured (CALIBRATION data, not findings about emergence)
@@ -51,6 +64,10 @@ Last updated: 2026-10-11 (M6 merged)
   max generation 2 in 2000 ticks; population cap enforced.
 - Migration harness calibration: echo→energy-rule gives behavioral continuity
   0.0 / effect −1.0; echo→echo gives continuity 1.0 / effect 0.0.
+- Real LLM migration (M8): rule→LLM continuity 0.10 / effect −0.90 on 3/3
+  seeds; LLM action window on seed 7: ABSORB 70, SIGNAL 2, WAIT 48.
+- LLM integration (M7): granite4.1:3b-q4_K_M produced valid typed decisions
+  in 80/80 cognition events on the reference GPU; zero schema rejections.
 
 ## What has NOT been demonstrated
 
@@ -59,26 +76,25 @@ Last updated: 2026-10-11 (M6 merged)
   tested convention formation).
 - No evolution claims: mutation machinery exists, but no selection pressure
   experiment has shown trait frequency changes across generations.
-- No LLM cognition yet — the system runs entirely without models (by design).
+- No memory-retention continuity: the LLM path has no per-subject memory yet;
+  the M8 continuity measures behavioral distribution only.
 - No world migration (second world) yet.
 - No machine/process migration yet.
-- Continuity measurement has only the behavioral action-distribution
-  dimension; memory/goal/preference dimensions await memory-carrying backends.
-- The migration experiment's negative controls work, but with stateless mock
-  backends the "migration effect" trivially equals the new controller's
-  policy — scientifically meaningful migration experiments require M7.
+- Multi-seed statistics exist only for the M8 migration (3 seeds); all other
+  experiments are single-seed observations.
+- The 3-seed agreement in M8 reflects temperature-0 prompting structure, not
+  proven robustness across models or prompt variants.
 
 ## What is blocked / deferred
 
-- Local LLM backend (M7) requires llama.cpp integration work; not blocked by
-  anything external — simply next in queue.
+- docs/prior-art.md: survey draft landed (PR#7); survey gaps listed in the
+  document itself (open-ended evolution lit, sim-to-real, agent checkpoints).
 - Field-energy time series in regenerated population samples carries 0.0
   (SubjectState records don't include it; documented limitation).
-- docs/prior-art.md: survey in progress (verified sources collected; file
-  write pending).
+- Per-subject memory for the LLM path: next major work item (docs/next.md).
 
 ## Verification status
 
-- 59 unit tests passing; fmt + clippy -D warnings clean.
-- CI green on all merged PRs (#1–#6).
-- Real release-build CLI runs recorded in PR descriptions (#3, #4, #5).
+- 66 unit tests passing; fmt + clippy -D warnings clean.
+- CI green on all merged PRs (#1–#9).
+- Real release-build CLI runs recorded in PR descriptions (#3, #4, #5, #8, #9).

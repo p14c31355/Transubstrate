@@ -111,3 +111,25 @@ All notable changes to Transubstrate are documented here.
   post-world {ABSORB 40}, zero deaths.
 - Tests: pull concentrates energy on the signaling node, conserves totals
   (modulo uniform regen), and stops after field decay.
+
+### Added (PR#35-#45, merged)
+- LlmBackendConfig.reasoning_effort: thinking-style models (qwen3.5) return
+  empty completions without it; CLI syntax `llm:<model>[:<effort>]` with a
+  known-effort allowlist
+- `--llm-temperature` for run-world-migration (default 0 = deterministic)
+- LLM memory context now renders each past decision WITH its observed
+  outcome (leakage-free)
+- Cross-model migration record: granite behavioral 0.75 vs qwen 0.00 —
+  temperature-0 tie broken; post-migration behavior is model-dependent
+- Outcome-driven exploration: at temp 0.7, 2/5 seeds learned SIGNAL from
+  outcome-visible memory; seed 2026 adapted post-swap (ABSORB 38 → SIGNAL 23)
+- Temperature sweep (sweep-world-migration batch runner, n=5/temp):
+  temp 0.3 dominates — 3/5 SIGNAL learning, 0 deaths (vs 2/5 with 2 deaths
+  at 0.7); temp 1.0: 2/4 valid + 1 schema-rejection (`ABSORBT` typo) —
+  WABIX fail-safe OBSERVED end-to-end in an LLM migration
+- memory_usage continuity dimension (5-dim vector): fraction of boundary-
+  remembered actions re-enacted post-swap, immune to FIFO roll-off; wired
+  into BOTH harnesses (rule→LLM 1.0, rule→echo 0.0, world signal-seeker
+  0.5 = strategy flip, control 1.0)
+- sweep-world-migration subcommand: multi-seed A/B batch runner emitting
+  mean ± population-sd per dimension (JSON stdout + --summary file)

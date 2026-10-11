@@ -388,9 +388,10 @@ fn main() {
                             phase.label, phase.backend_id, phase.actions_taken, phase.survived
                         );
                     }
-                    let dim = &result.continuity.dimensions[0];
-                    println!("continuity (behavioral): {:.4}", dim.value);
-                    println!("  computation: {}", dim.computation);
+                    for dim in &result.continuity.dimensions {
+                        println!("continuity ({}): {:.4}", dim.name, dim.value);
+                        println!("  computation: {}", dim.computation);
+                    }
                     println!(
                         "control continuity (no migration): {:.4}",
                         result.control_continuity.value

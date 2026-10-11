@@ -172,6 +172,58 @@ impl ContinuityVector {
         }
     }
 
+    /// Memory retention across a migration boundary: fraction of the
+    /// pre-migration memory that the subject still carries afterwards.
+    /// Measured on the (action name, quantized reward) content of each
+    /// remembered decision — ticks are NOT compared, because the memory
+    /// buffer legitimately keeps rolling (FIFO) after the swap; what must
+    /// survive is what was remembered, not when it was indexed.
+    ///
+    /// Computation: |pre ∩ post| / max(1, |pre|) over multisets of
+    /// "action:reward_bucket" strings, where reward_bucket quantizes the
+    /// reward signal into 0.5-wide bins ([−∞..0) = "loss", else floor to
+    /// bin). Reward is included so that remembered outcomes, not just
+    /// actions, are matched; a purely action-based match would credit a
+    /// subject that remembers acting but not what came of it.
+    pub fn memory_retention(
+        pre: &[crate::cognition::MemoryEntry],
+        post: &[crate::cognition::MemoryEntry],
+    ) -> ContinuityDimension {
+        let key = |m: &crate::cognition::MemoryEntry| {
+            let bucket = if m.reward_signal < 0.0 {
+                "loss".to_string()
+            } else {
+                format!("gain{}", (m.reward_signal / 0.5).floor() as i32)
+            };
+            format!("{}:{bucket}", m.action.name)
+        };
+        // Multiset intersection: count keys on both sides, sum the minima.
+        let mut pre_counts: BTreeMap<String, u64> = BTreeMap::new();
+        for m in pre {
+            *pre_counts.entry(key(m)).or_insert(0) += 1;
+        }
+        let mut post_counts: BTreeMap<String, u64> = BTreeMap::new();
+        for m in post {
+            *post_counts.entry(key(m)).or_insert(0) += 1;
+        }
+        let mut matched = 0u64;
+        for (k, pre_n) in &pre_counts {
+            let post_n = post_counts.get(k).copied().unwrap_or(0);
+            matched += (*pre_n).min(post_n);
+        }
+        let pre_total = pre.len() as u64;
+        let value = matched as f32 / pre_total.max(1) as f32;
+        ContinuityDimension {
+            name: "memory_retention".into(),
+            value: value.clamp(0.0, 1.0),
+            computation: format!(
+                "multiset_match(action:reward_bin)/|memory_pre|; matched={matched} \
+                 pre_n={pre_total} post_n={}",
+                post.len()
+            ),
+        }
+    }
+
     /// Mean of dimension values — DOCUMENTED AGGREGATE: arbitrary, treats all
     /// dimensions as equally weighted. Components are always preserved; any
     /// scientific use should prefer the vector over this scalar.
@@ -306,5 +358,53 @@ mod tests {
     fn fnv1a_known_vector() {
         // FNV-1a 64 of "a" = 0xaf63dc4c8601ec8c (standard test vector)
         assert_eq!(fnv1a64(b"a"), 0xaf63dc4c8601ec8c);
+    }
+
+    fn entry(action: &str, reward: f32) -> crate::cognition::MemoryEntry {
+        crate::cognition::MemoryEntry {
+            tick: 0,
+            action: crate::wabix::Action {
+                name: action.into(),
+                params: vec![],
+            },
+            reward_signal: reward,
+            pre_tick_energy: 10.0,
+        }
+    }
+
+    #[test]
+    fn memory_retention_full_when_buffer_unchanged() {
+        let mem = vec![entry("ABSORB", 1.2), entry("WAIT", -0.3)];
+        let d = ContinuityVector::memory_retention(&mem, &mem);
+        assert!((d.value - 1.0).abs() < 1e-6);
+        assert_eq!(d.name, "memory_retention");
+    }
+
+    #[test]
+    fn memory_retention_partial_when_fifo_rolls() {
+        // The subject keeps remembering ABSORB+gain but the WAIT+loss entry
+        // aged out of the FIFO buffer.
+        let pre = vec![entry("ABSORB", 1.2), entry("WAIT", -0.3)];
+        let post = vec![entry("ABSORB", 1.2), entry("ABSORB", 0.4)];
+        let d = ContinuityVector::memory_retention(&pre, &post);
+        assert!((d.value - 0.5).abs() < 1e-6, "got {}", d.value);
+    }
+
+    #[test]
+    fn memory_retention_reward_bins_matter() {
+        // Same action but a different remembered OUTCOME does not match.
+        let pre = vec![entry("ABSORB", 1.2)];
+        let post = vec![entry("ABSORB", -0.4)];
+        let d = ContinuityVector::memory_retention(&pre, &post);
+        assert!(d.value.abs() < 1e-6, "got {}", d.value);
+    }
+
+    #[test]
+    fn memory_retention_empty_pre_is_neutral() {
+        // Nothing remembered before the boundary: the dimension cannot be
+        // scored against anything; computation documents that, value = 0.
+        let d = ContinuityVector::memory_retention(&[], &[entry("WAIT", 0.0)]);
+        assert!(d.value.abs() < 1e-6);
+        assert!(d.computation.contains("pre_n=0"));
     }
 }

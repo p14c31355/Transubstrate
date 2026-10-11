@@ -200,6 +200,10 @@ pub fn run_world_migration(
 
     // ---- Migration event: subject crosses into the network world ----
     let carried_energy = sref.energy.max(1.0);
+    // Snapshot the subject's memory AT the boundary: what is remembered in
+    // the origin world vs what is carried into the destination world is the
+    // memory-retention dimension (memory belongs to the subject).
+    let memory_pre: Vec<crate::cognition::MemoryEntry> = memory.clone();
     let migration = MigrationEvent::new(
         &sid_str,
         "world",
@@ -301,10 +305,13 @@ pub fn run_world_migration(
     Ok(ContinuityVector {
         subject_id: sid_str,
         migration_id: Some(migration.migration_id),
-        dimensions: vec![ContinuityVector::behavioral(
-            &pre_collector.fingerprint(),
-            &post_collector.fingerprint(),
-        )],
+        dimensions: vec![
+            ContinuityVector::behavioral(
+                &pre_collector.fingerprint(),
+                &post_collector.fingerprint(),
+            ),
+            ContinuityVector::memory_retention(&memory_pre, &memory),
+        ],
     })
 }
 

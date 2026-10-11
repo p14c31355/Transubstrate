@@ -298,6 +298,9 @@ pub fn run_migration_experiment(
         to: migration.to.clone(),
         tick: half,
     });
+    // Snapshot the subject's memory AT the boundary: what is remembered
+    // going in vs what is carried out is the memory-retention dimension.
+    let memory_pre: Vec<crate::cognition::MemoryEntry> = memory.clone();
 
     let mut backend_b = config.backend_b.instantiate();
     let phase_b = run_phase(
@@ -414,6 +417,7 @@ pub fn run_migration_experiment(
 
     // ---- Continuity measurement ----
     let behavioral = ContinuityVector::behavioral(&phase_a.fingerprint, &phase_b.fingerprint);
+    let memory_continuity = ContinuityVector::memory_retention(&memory_pre, &memory);
     let control_continuity = ContinuityVector::behavioral(
         &control_a.phases[0].fingerprint,
         &control_a.phases[1].fingerprint,
@@ -423,7 +427,7 @@ pub fn run_migration_experiment(
     let continuity = ContinuityVector {
         subject_id: sid.clone(),
         migration_id: Some(migration.migration_id.clone()),
-        dimensions: vec![behavioral],
+        dimensions: vec![behavioral, memory_continuity],
     };
 
     log.push(EventPayload::ExperimentFinished {

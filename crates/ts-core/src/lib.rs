@@ -22,3 +22,4 @@ pub mod runtime;
 pub mod scarcity;
 pub mod test_world;
 pub mod wabix;
+pub mod world_migration;

@@ -235,6 +235,83 @@ impl CognitionBackend for EnergyRuleBackend {
     }
 }
 
+/// Positive control for the chemical substrate: behaves like the energy
+/// rule, but when the local energy observation is VERY high (surplus), it
+/// spends surplus on RELEASE channel 1 — writing the cell's chemical
+/// field. A deterministic "marker" organism: it gives the world chemical
+/// marks WITHOUT any semantics attached, so later runs can ask whether
+/// anyone else's behavior correlates with the marks. The rule reads and
+/// writes channel names by design (rule-based controllers are named-channel
+/// machines, not subjects under study).
+#[derive(Clone, Debug)]
+pub struct ChemMarkerBackend {
+    /// local_energy above which the rule absorbs (like EnergyRuleBackend).
+    pub absorb_threshold: f32,
+    /// local_energy above which the rule releases into the chemical field.
+    pub mark_threshold: f32,
+}
+
+impl Default for ChemMarkerBackend {
+    fn default() -> Self {
+        Self {
+            absorb_threshold: 0.3,
+            // Mark only in surplus: above 0.8 the organism has >= 8.0 raw
+            // energy, enough to pay for a mark and keep metabolizing.
+            mark_threshold: 0.8,
+        }
+    }
+}
+
+impl CognitionBackend for ChemMarkerBackend {
+    fn implementation(&self) -> &'static str {
+        "rule-chem-marker-v0"
+    }
+
+    fn decide(&mut self, ctx: &DecisionContext) -> Result<Decision, CognitionError> {
+        let energy_seen = ctx
+            .observations
+            .iter()
+            .find(|o| o.channel == "local_energy")
+            .map(|o| o.value)
+            .unwrap_or(0.0);
+
+        let action = if energy_seen > self.mark_threshold {
+            ctx.manifest
+                .actions
+                .iter()
+                .find(|a| a.name == "RELEASE" && a.arity >= 2)
+                .map(|schema| Action {
+                    name: schema.name.clone(),
+                    // params: [amount, channel] — channel 1 = chemical.
+                    params: vec![0.5, 1.0],
+                })
+        } else if energy_seen > self.absorb_threshold {
+            ctx.manifest
+                .actions
+                .iter()
+                .find(|a| a.name == "ABSORB")
+                .map(|schema| Action {
+                    name: schema.name.clone(),
+                    params: vec![1.0],
+                })
+        } else {
+            ctx.manifest
+                .actions
+                .iter()
+                .find(|a| a.name == "WAIT")
+                .map(|schema| Action {
+                    name: schema.name.clone(),
+                    params: vec![],
+                })
+        };
+
+        Ok(Decision {
+            action,
+            rationale: format!("chem-marker rule: local_energy={energy_seen:.3}"),
+        })
+    }
+}
+
 /// Reproducing variant of the energy rule: ABSORB when energy channel is
 /// high, DIVIDE when the (normalized) energy store is very high. The world
 /// enforces the real division threshold; this rule just proposes DIVIDE at

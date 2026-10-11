@@ -147,6 +147,15 @@ pub enum WorldEvent {
         action: String,
         reason: String,
     },
+    /// A subject converted its own energy into a cell's chemical field
+    /// (RELEASE channel 1): the semantics-free substrate was WRITTEN.
+    /// Marks are the raw material of chemical-field meaning formation —
+    /// who left what where, without any payoff attached.
+    ChemicalMarked {
+        subject: String,
+        pos: (u32, u32),
+        amount: f32,
+    },
 }
 
 /// Convenience: build a manifest.

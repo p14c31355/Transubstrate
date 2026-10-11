@@ -112,6 +112,7 @@ pub fn regenerate_from_records(records: &[EventRecord]) -> RegeneratedMetrics {
                     // events; this is a cross-check path.
                 }
             }
+            EventPayload::DecisionObservation { .. } => {}
             EventPayload::DecisionMade { decision, .. } => {
                 m.decisions += 1;
                 match &decision.action {
@@ -132,6 +133,7 @@ pub fn regenerate_from_records(records: &[EventRecord]) -> RegeneratedMetrics {
                         }
                         crate::wabix::WorldEvent::SubjectDied { .. } => m.deaths += 1,
                         crate::wabix::WorldEvent::ActionRejected { .. } => {}
+                        crate::wabix::WorldEvent::ChemicalMarked { .. } => {}
                     }
                 }
             }

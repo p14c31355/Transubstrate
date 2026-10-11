@@ -68,6 +68,13 @@ enum Commands {
         /// lineages can expand under binding scarcity).
         #[arg(long, default_value_t = 40.0)]
         divide_threshold: f32,
+        /// First N organisms use the ChemMarker rule (they write the
+        /// chemical substrate; the rest observe it). 0 = all `--backend`.
+        #[arg(long, default_value_t = 0)]
+        markers: usize,
+        /// LLM sampling temperature (llm: backends only; 0 = deterministic).
+        #[arg(long, default_value_t = 0.0)]
+        llm_temperature: f32,
         #[arg(long, default_value = "runs")]
         out: PathBuf,
     },
@@ -234,6 +241,12 @@ enum Commands {
         #[arg(long, default_value_t = 20)]
         tail: usize,
     },
+    /// Analyze a primordial event log for chemical-mark/behavior
+    /// correlation (did anyone act differently on marked cells?).
+    AnalyzeChem {
+        /// Path to the events.jsonl file.
+        path: PathBuf,
+    },
 }
 
 fn parse_backend(name: &str, seed: u64) -> Result<BackendKind, String> {
@@ -268,8 +281,12 @@ fn parse_primordial_backend(
         "signal-seeker" => Ok(PB::SignalSeeker {
             signal_threshold: 0.1,
         }),
+        "chem-marker" => Ok(PB::ChemMarker {
+            absorb_threshold: 0.3,
+            mark_threshold: 0.8,
+        }),
         other => Err(format!(
-            "unknown backend '{other}' (expected echo|random|energy-rule|reproducing-rule|signal-seeker)"
+            "unknown backend '{other}' (expected echo|random|energy-rule|reproducing-rule|signal-seeker|chem-marker)"
         )),
     }
 }
@@ -388,10 +405,12 @@ fn main() {
             energy,
             regen,
             divide_threshold,
+            markers,
+            llm_temperature,
             out,
         } => {
             let backend_kind = match parse_any_backend(&backend, seed) {
-                Ok(b) => b,
+                Ok(b) => apply_llm_temperature(b, llm_temperature),
                 Err(e) => {
                     eprintln!("{e}");
                     std::process::exit(2);
@@ -412,6 +431,7 @@ fn main() {
                     start_energy: energy,
                 },
                 division_threshold: Some(divide_threshold),
+                marker_population: markers,
             };
             let id = config.experiment_id.to_string();
             let dir = out.join(&id);
@@ -1227,6 +1247,22 @@ fn main() {
                             .map(|a| a.name.as_str())
                             .unwrap_or("<none>")
                     ),
+                    EventPayload::DecisionObservation {
+                        subject_id,
+                        tick,
+                        observations,
+                    } => {
+                        let chem = observations
+                            .iter()
+                            .find(|(c, _)| c == "nearby_chemical_0")
+                            .map(|(_, v)| v)
+                            .copied()
+                            .unwrap_or(0.0);
+                        format!(
+                            "seq={} OBS t={tick} subj={subject_id} nearby_chem={chem:.3}",
+                            r.seq
+                        )
+                    }
                     EventPayload::WorldEvents { tick, events } => format!(
                         "seq={} WORLD t={tick} {}",
                         r.seq,
@@ -1239,6 +1275,9 @@ fn main() {
                                     format!("{action}✗"),
                                 ts_core::wabix::WorldEvent::SubjectDied { cause, .. } =>
                                     format!("DIED({cause})"),
+                                ts_core::wabix::WorldEvent::ChemicalMarked {
+                                    pos, amount, ..
+                                } => format!("MARK({pos:?},{amount:.2})"),
                             })
                             .collect::<Vec<_>>()
                             .join(",")
@@ -1286,6 +1325,47 @@ fn main() {
                     }
                 };
                 println!("{line}");
+            }
+        }
+        Commands::AnalyzeChem { path } => {
+            match ts_core::chem_convention::analyze_chem_convention_file(&path) {
+                Ok(s) => {
+                    println!("marks total: {}", s.marks_total);
+                    for (subj, n) in &s.per_subject_marks {
+                        println!("  marks by {subj}: {n}");
+                    }
+                    if let Some(rate) = s.on_chem_absorb_rate {
+                        println!(
+                            "on-chem absorb rate (sensed nearby_chemical_0 > 0): {rate:.4} (n={})",
+                            s.on_chem_n
+                        );
+                    } else {
+                        println!("on-chem absorb rate: no chemical-sensing decisions observed");
+                    }
+                    println!(
+                        "baseline absorb rate: {:.4} (n={})",
+                        s.baseline_absorb_rate, s.decisions_n
+                    );
+                    match s.mark_awareness {
+                        Some(a) => println!("mark_awareness (on-chem - baseline): {a:+.4}"),
+                        None => println!(
+                            "mark_awareness: undefined (no chemical-sensing decisions; nothing to correlate)"
+                        ),
+                    }
+                    match s.observer_awareness {
+                        Some(a) => println!(
+                            "observer_awareness (non-writer on-chem - non-writer baseline): {a:+.4} (n={})",
+                            s.observer_on_chem_n
+                        ),
+                        None => println!(
+                            "observer_awareness: undefined (no non-writer chemical-sensing decisions)"
+                        ),
+                    }
+                }
+                Err(e) => {
+                    eprintln!("analysis failed: {e}");
+                    std::process::exit(1);
+                }
             }
         }
     }

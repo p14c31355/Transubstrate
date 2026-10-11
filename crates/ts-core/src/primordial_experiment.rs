@@ -38,6 +38,13 @@ pub enum BackendKind {
     SignalSeeker {
         signal_threshold: f32,
     },
+    /// Chemical-marker positive control: surplus energy is RELEASEd into
+    /// the cell's chemical field (channel 1) — writes the semantics-free
+    /// substrate so later runs can ask who reacts to the marks.
+    ChemMarker {
+        absorb_threshold: f32,
+        mark_threshold: f32,
+    },
     Malformed,
     /// Local LLM via OpenAI-compatible endpoint. One SHARED backend serves
     /// the whole population (the model loads once; VRAM does not scale with
@@ -69,6 +76,13 @@ impl BackendKind {
                     signal_threshold: *signal_threshold,
                 })
             }
+            BackendKind::ChemMarker {
+                absorb_threshold,
+                mark_threshold,
+            } => Box::new(crate::backends::ChemMarkerBackend {
+                absorb_threshold: *absorb_threshold,
+                mark_threshold: *mark_threshold,
+            }),
             BackendKind::Malformed => Box::new(crate::backends::MalformedBackend::default()),
             BackendKind::Llm { config } => {
                 Box::new(crate::llm_backend::LlmBackend::new(config.clone()))
@@ -83,6 +97,7 @@ impl BackendKind {
             BackendKind::EnergyRule { .. } => "rule-energy-v0",
             BackendKind::ReproducingRule { .. } => "rule-energy-divide-v0",
             BackendKind::SignalSeeker { .. } => "rule-signal-seeker-v0",
+            BackendKind::ChemMarker { .. } => "rule-chem-marker-v0",
             BackendKind::Malformed => "mock-malformed-v0",
             BackendKind::Llm { .. } => "llm-openai-compat-v0",
         }
@@ -105,6 +120,12 @@ pub struct PrimordialExperimentConfig {
     /// Genome::default() (40.0); lowering it lets lineages expand under
     /// binding scarcity (reproduction experiments).
     pub division_threshold: Option<f32>,
+    /// The FIRST N organisms use the ChemMarker rule instead of `organism`
+    /// spec — mixed-population runs where deterministic "markers" write
+    /// the chemical substrate while the remaining organisms (e.g. LLMs)
+    /// observe the marks. 0 = everyone uses `organism` (default).
+    #[serde(default)]
+    pub marker_population: usize,
 }
 
 impl Default for PrimordialExperimentConfig {
@@ -123,6 +144,7 @@ impl Default for PrimordialExperimentConfig {
                 start_energy: 10.0,
             },
             division_threshold: None,
+            marker_population: 0,
         }
     }
 }
@@ -154,6 +176,8 @@ pub struct PrimordialRunSummary {
     pub divide_events: u64,
     pub rejected_events: u64,
     pub backend_errors: u64,
+    /// RELEASE channel-1 events (the chemical substrate was written).
+    pub chemical_marks: u64,
     pub samples: Vec<PopulationSample>,
     /// Mean lifetime of dead organisms (ticks); None if nobody died.
     pub mean_lifetime_of_dead: Option<f64>,
@@ -171,6 +195,7 @@ struct Aggregates {
     divide_events: u64,
     rejected_events: u64,
     backend_errors: u64,
+    chemical_marks: u64,
     death_ticks: Vec<(String, u64)>,
 }
 
@@ -228,7 +253,18 @@ pub fn run_primordial(
             subject_ref: sref.clone(),
         });
         subjects.push((sid.to_string(), sref));
-        backends.insert(sid.to_string(), config.organism.backend.instantiate());
+        // Mixed populations: the first marker_population organisms are
+        // ChemMarker rules (they WRITE the chemical substrate); everyone
+        // else uses the config's own spec (e.g. an LLM that can OBSERVE it).
+        let backend_kind = if (i as usize) < config.marker_population {
+            crate::primordial_experiment::BackendKind::ChemMarker {
+                absorb_threshold: 0.3,
+                mark_threshold: 0.8,
+            }
+        } else {
+            config.organism.backend.clone()
+        };
+        backends.insert(sid.to_string(), backend_kind.instantiate());
         subject_ids.push(sid);
     }
 
@@ -242,6 +278,7 @@ pub fn run_primordial(
         divide_events: 0,
         rejected_events: 0,
         backend_errors: 0,
+        chemical_marks: 0,
         death_ticks: Vec::new(),
     };
     let mut samples: Vec<PopulationSample> = Vec::new();
@@ -312,6 +349,29 @@ pub fn run_primordial(
                     sid,
                 );
                 cognition_events_total += 1;
+                // Decision-time position: the chemical-convention analyzer
+                // needs the subject's cell AT decision time (sampling-based
+                // SubjectState records are too sparse to catch it).
+                if let Some(org) = world.organism(sid) {
+                    log.push(EventPayload::SubjectState {
+                        subject_id: sid.clone(),
+                        tick,
+                        pos: org.pos,
+                        energy: org.energy,
+                    });
+                }
+                // Observation snapshot at decision time: lets analyzers
+                // correlate behavior with what the subject actually SAW
+                // (e.g. react differently when a chemical mark is in range).
+                log.push(EventPayload::DecisionObservation {
+                    subject_id: sid.clone(),
+                    tick,
+                    observations: ctx
+                        .observations
+                        .iter()
+                        .map(|o| (o.channel.clone(), o.value))
+                        .collect(),
+                });
                 log.push(EventPayload::DecisionMade {
                     subject_id: sid.clone(),
                     tick,
@@ -368,6 +428,9 @@ pub fn run_primordial(
                             _ => {}
                         }
                     }
+                }
+                crate::wabix::WorldEvent::ChemicalMarked { .. } => {
+                    aggregates.chemical_marks += 1;
                 }
                 crate::wabix::WorldEvent::ActionRejected { .. } => aggregates.rejected_events += 1,
                 crate::wabix::WorldEvent::SubjectDied { subject, .. } => {
@@ -489,6 +552,7 @@ pub fn run_primordial(
         divide_events: aggregates.divide_events,
         rejected_events: aggregates.rejected_events,
         backend_errors: aggregates.backend_errors,
+        chemical_marks: aggregates.chemical_marks,
         samples,
         mean_lifetime_of_dead: mean_lifetime,
         distinct_lineages: lineage_tree.distinct_lineages(),

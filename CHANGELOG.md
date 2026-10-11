@@ -195,3 +195,11 @@ All notable changes to Transubstrate are documented here.
   rule calibration lag 0 stable; granite 0.3 2/5 adapt (lag 50-100,
   persist); temp 1.0 lag-0 switches separated from learning via the
   persistence flag; qwen 1/5 switch reverts
+- Chemical meaning-formation detector: `WorldEvent::ChemicalMarked` logs
+  every channel-1 mark; `nearby_chemical_0` channel (4-neighbor gradient
+  reach); `DecisionObservation` snapshots per decision; `--markers N`
+  mixed populations (ChemMarker writers + LLM observers); `analyze-chem`
+  reports observation-based mark_awareness and writer-excluded
+  observer_awareness. Rule calibration true-negative; LLM n=5 seeds:
+  observer_awareness |a|<0.01 — marks are SENSED but IGNORED (negative
+  result, supports the no-payoff-coupling hypothesis)

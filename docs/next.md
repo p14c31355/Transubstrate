@@ -101,9 +101,13 @@ the batch sweep runner all merged)
       population cap, field energy reaches a supply=consumption steady
       state (docs/experiments/carrying-capacity.md). Births still zero
       under scarcity (divide threshold unreachable at equilibrium energy).
-- [ ] Reproduction under binding scarcity: a divide threshold reachable
-      at equilibrium energy — do lineages expand to the carrying-capacity
-      limit and stabilize there?
+- [x] Reproduction under binding scarcity: `--divide-threshold` flag +
+      founder-genome setter + a mutation-floor FIX (mutate clamped the
+      threshold to a fixed 20..100 band — low-threshold lineages could
+      never persist; the floor now follows parents below 20). Threshold
+      6.0: population doubles 8→16 and stabilizes AT the PR#64 carrying
+      capacity; 3.0-5.0: over-reproduction collapse (children starve)
+      (docs/experiments/repro-scarcity.md).
 
 ## 3. M9 continuation — world migration
 

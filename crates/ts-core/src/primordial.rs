@@ -107,6 +107,9 @@ pub struct PrimordialWorld {
     pub population_cap: usize,
     /// Internal counter for generating child ids deterministically.
     child_counter: u64,
+    /// Genome used for founder organisms (settable for reproduction
+    /// experiments; defaults to Genome::default()).
+    founder_genome: Genome,
 }
 
 /// Energy field stores arbitrary positive floats; observations normalize to
@@ -127,6 +130,7 @@ impl PrimordialWorld {
             config,
             tick: 0,
             division_policy: DivisionPolicy::default(),
+            founder_genome: Genome::default(),
             population_cap: 256,
             child_counter: 0,
         }
@@ -134,6 +138,14 @@ impl PrimordialWorld {
 
     fn idx(&self, x: u32, y: u32) -> usize {
         (y * self.config.width + x) as usize
+    }
+
+    /// Override the founder genome used by [`spawn`](Self::spawn) (and the
+    /// initial population). World-level knob for reproduction experiments:
+    /// e.g. lowering `division_threshold` lets lineages expand under
+    /// binding scarcity where the default 40.0 is unreachable.
+    pub fn set_founder_genome(&mut self, genome: Genome) {
+        self.founder_genome = genome;
     }
 
     /// Spawn a founder organism with the default genome.
@@ -145,7 +157,7 @@ impl PrimordialWorld {
             subject_id,
             pos,
             start_energy,
-            Genome::default(),
+            self.founder_genome.clone(),
             subject_id.to_string(), // founders start their own lineage
             0,
         );

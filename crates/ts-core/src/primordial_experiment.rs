@@ -101,6 +101,10 @@ pub struct PrimordialExperimentConfig {
     /// Organism roster: spec applied to `population` organisms.
     pub population: u32,
     pub organism: OrganismSpec,
+    /// Override for the founder genome's division threshold. None keeps
+    /// Genome::default() (40.0); lowering it lets lineages expand under
+    /// binding scarcity (reproduction experiments).
+    pub division_threshold: Option<f32>,
 }
 
 impl Default for PrimordialExperimentConfig {
@@ -118,6 +122,7 @@ impl Default for PrimordialExperimentConfig {
                 },
                 start_energy: 10.0,
             },
+            division_threshold: None,
         }
     }
 }
@@ -198,6 +203,12 @@ pub fn run_primordial(
     });
 
     let mut world = PrimordialWorld::new(config.world.clone(), config.world_seed);
+    if let Some(threshold) = config.division_threshold {
+        world.set_founder_genome(crate::lineage::Genome {
+            division_threshold: threshold,
+            ..Default::default()
+        });
+    }
 
     // Spawn population with stable subject IDs (also used as RNG-domain tags).
     let mut subjects: Vec<(String, SubjectRef)> = Vec::new();

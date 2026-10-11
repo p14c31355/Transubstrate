@@ -93,8 +93,16 @@ the batch sweep runner all merged)
       temperatures — the world economy must couple received signals to
       payoff, which would pre-define SIGNAL's meaning (trade-off made
       explicit in the record).
-- [ ] Chemical-field meaning formation (the semantics-free substrate is
-      still unused by controllers).
+- [x] Chemical substrate activated (PR arc): `RELEASE` gains a channel
+      parameter (arity 2, matching the GOAL §6 vocabulary) — channel 1
+      converts organism energy into the cell's chemical field; chemical
+      decays (0.1/tick) and diffuses (0.05 to 4-neighbors) and has NO
+      absorb payoff (meaning-free by construction; 3 new tests, 107 total)
+      (docs/experiments/chemical-substrate.md).
+- [ ] Chemical-field meaning formation: with the substrate live, can a
+      population coordinate meaning onto chemical gradients? Detection
+      metric first (do subjects' RELEASE-channel-1 marks correlate with
+      later follower behavior?); LLM subjects see `chemical_0` today.
 - [x] Carrying capacity (primordial field): `--regen` flag added; at regen
       0.0005 the survivor count converges to 13-16 as the initial
       population grows 8→48 (deaths 0→35) — the field's supply sets the

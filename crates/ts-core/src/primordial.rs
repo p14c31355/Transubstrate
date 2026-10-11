@@ -30,7 +30,7 @@ pub fn primordial_manifest() -> CapabilityManifest {
         .channel("nearby_signal_0", "scalar", (0.0, 1.0))
         .action("WAIT", 0, vec![])
         .action("ABSORB", 1, vec![(0.0, 1.0)])
-        .action("RELEASE", 1, vec![(0.0, 1.0)])
+        .action("RELEASE", 2, vec![(0.0, 1.0), (0.0, 1.0)])
         .action("SIGNAL", 1, vec![(0.0, 1.0)])
         .action("MOVE", 2, vec![(0.0, 1.0), (0.0, 1.0)])
         .action("DIVIDE", 0, vec![])
@@ -54,6 +54,10 @@ pub struct PrimordialConfig {
     pub absorb_efficiency: f32,
     /// Signal field decay per tick.
     pub signal_decay: f32,
+    /// Chemical (channel 1) decay per tick.
+    pub chemical_decay: f32,
+    /// Fraction of each cell's chemical diffusing to 4-neighbors per tick.
+    pub chemical_diffusion: f32,
 }
 
 impl Default for PrimordialConfig {
@@ -67,6 +71,8 @@ impl Default for PrimordialConfig {
             metabolism: 0.05,
             absorb_efficiency: 0.8,
             signal_decay: 0.5,
+            chemical_decay: 0.1,
+            chemical_diffusion: 0.05,
         }
     }
 }
@@ -237,6 +243,7 @@ impl PrimordialWorld {
         // Diffusion: compute deltas first, then apply (synchronous).
         let mut delta_energy = vec![0.0f32; self.energy_field.len()];
         let mut delta_signal = vec![0.0f32; self.signal_field.len()];
+        let mut delta_chem = vec![0.0f32; self.chemical_field.len()];
         for y in 0..h {
             for x in 0..w {
                 let i = self.idx(x, y);
@@ -255,6 +262,17 @@ impl PrimordialWorld {
                     delta_signal[i] -= sig_share / 4.0;
                     delta_signal[j] += sig_share / 4.0;
                 }
+                // Chemicals diffuse like energy (gradient-forming).
+                let chem_share = self.chemical_field[i] * self.config.chemical_diffusion
+                    / neighbors.len() as f32;
+                for (nx, ny) in &neighbors {
+                    let j = self.idx(*nx, *ny);
+                    let flow = chem_share
+                        - self.chemical_field[j] * self.config.chemical_diffusion
+                            / neighbors.len() as f32;
+                    delta_chem[i] -= flow;
+                    delta_chem[j] += flow;
+                }
             }
         }
         for (i, d) in delta_energy.iter().enumerate() {
@@ -263,6 +281,10 @@ impl PrimordialWorld {
         for (i, v) in delta_signal.iter().enumerate() {
             self.signal_field[i] =
                 (self.signal_field[i] * (1.0 - self.config.signal_decay) + v).max(0.0);
+        }
+        for (i, v) in delta_chem.iter().enumerate() {
+            self.chemical_field[i] =
+                (self.chemical_field[i] * (1.0 - self.config.chemical_decay) + v).max(0.0);
         }
     }
 
@@ -301,12 +323,21 @@ impl PrimordialWorld {
                 });
             }
             "RELEASE" => {
-                // Return organism energy to the cell.
+                // params: [amount, channel] — channel 0 returns energy to
+                // the cell's energy field; channel 1 converts organism
+                // energy into the cell's chemical field (the
+                // semantics-free substrate: no payoff is attached, the
+                // chemical can only be sensed, never eaten).
                 let amount = (action.params[0] * MAX_ABSORB).min(self.organisms[org_idx].energy);
                 self.organisms[org_idx].energy -= amount;
                 let (x, y) = self.organisms[org_idx].pos;
                 let i = self.idx(x, y);
-                self.energy_field[i] += amount;
+                let channel = action.params.get(1).copied().unwrap_or(0.0);
+                if channel >= 0.5 {
+                    self.chemical_field[i] += amount;
+                } else {
+                    self.energy_field[i] += amount;
+                }
                 events.push(WorldEvent::ActionApplied {
                     subject: subject.clone(),
                     action: "RELEASE".into(),
@@ -707,5 +738,113 @@ mod tests {
         };
         assert_eq!(run(123), run(123));
         assert_ne!(run(123), run(124));
+    }
+
+    #[test]
+    fn release_channel_one_writes_the_chemical_field() {
+        // The semantics-free substrate: RELEASE with channel 1 converts
+        // organism energy into cell chemical; the chemical is observable
+        // via chemical_0 and decays/diffuses, but has NO payoff (nothing
+        // absorbs it).
+        let mut w = PrimordialWorld::new(Default::default(), 2024);
+        w.spawn("a", 20.0);
+        let before_chem = w.chemical_field.clone();
+        assert!(before_chem.iter().all(|&v| v == 0.0));
+        let energy_before = w.organism("a").unwrap().energy;
+
+        let actions = vec![(
+            "a".to_string(),
+            Action {
+                name: "RELEASE".into(),
+                params: vec![0.5, 1.0], // amount 0.5, channel 1 (chemical)
+            },
+        )];
+        let _events = w.tick(&actions);
+
+        // Chemical appeared on the organism's cell and energy was spent.
+        let pos = w.organism("a").unwrap().pos;
+        let i = w.idx(pos.0, pos.1);
+        assert!(
+            w.chemical_field[i] > 0.0,
+            "chemical must appear at the release cell"
+        );
+        assert!(
+            w.organism("a").unwrap().energy < energy_before,
+            "release must cost organism energy"
+        );
+    }
+
+    #[test]
+    fn chemical_diffuses_and_decays() {
+        // A chemical blob at one cell spreads to neighbors and shrinks.
+        let mut w = PrimordialWorld::new(Default::default(), 2024);
+        w.spawn("a", 20.0);
+        let actions = vec![(
+            "a".to_string(),
+            Action {
+                name: "RELEASE".into(),
+                params: vec![1.0, 1.0],
+            },
+        )];
+        let _events = w.tick(&actions);
+        let pos = w.organism("a").unwrap().pos;
+        let i = w.idx(pos.0, pos.1);
+        let peak = w.chemical_field[i];
+
+        // Many ticks of decay + diffusion.
+        for _ in 0..20 {
+            let _ = w.tick(&[]);
+        }
+        let after = w.chemical_field[i];
+        let neighbors: f32 = w
+            .neighbors4(pos.0, pos.1)
+            .iter()
+            .map(|&(nx, ny)| w.chemical_field[w.idx(nx, ny)])
+            .sum();
+        assert!(
+            after < peak,
+            "decay must shrink the peak: {peak} -> {after}"
+        );
+        assert!(
+            neighbors > 0.0,
+            "diffusion must spread chemical to neighbors"
+        );
+    }
+
+    #[test]
+    fn chemical_has_no_absorb_payoff() {
+        // Nothing consumes the chemical: ABSORB only takes from the energy
+        // field. A cell loaded with chemical and empty of energy yields no
+        // gain — the substrate stays meaning-free.
+        let mut w = PrimordialWorld::new(Default::default(), 2024);
+        w.spawn("a", 20.0);
+        let actions = vec![(
+            "a".to_string(),
+            Action {
+                name: "RELEASE".into(),
+                params: vec![1.0, 1.0],
+            },
+        )];
+        let _ = w.tick(&actions);
+        let pos = w.organism("a").unwrap().pos;
+        let i = w.idx(pos.0, pos.1);
+        // Drain the cell's ENERGY field so ABSORB has nothing to eat.
+        w.energy_field[i] = 0.0;
+        let e_before = w.organism("a").unwrap().energy;
+
+        let absorb = vec![(
+            "a".to_string(),
+            Action {
+                name: "ABSORB".into(),
+                params: vec![1.0],
+            },
+        )];
+        let _ = w.tick(&absorb);
+        let e_after = w.organism("a").unwrap().energy;
+        // Only metabolism (0.05) should have been lost — no chemical gain.
+        assert!(
+            (e_after - (e_before - 0.05)).abs() < 1e-4,
+            "chemical must have no absorb payoff: {e_before} -> {e_after}"
+        );
     }
 }

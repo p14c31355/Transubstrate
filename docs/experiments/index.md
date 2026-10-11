@@ -36,6 +36,7 @@ kept, and nothing here claims emergence.
 | 26 | Observation adaptation | docs/experiments/observation-adaptation.md | lag+persistence decision-stream metric: rule lag 0 (stable), granite 0.3 2/5 lag 50-100 persist, temp 1.0 lag 0 (flail), qwen 1/5 non-persisting switch |
 | 27 | Chemical meaning formation | docs/experiments/chem-meaning-formation.md | NEGATIVE: detection instrument (marks logged, nearby_chemical_0, decision snapshots, analyze-chem) calibrated; LLM observers 5/5 seeds |awareness|<0.01 — sensed the gradient, ignored it; supports the no-payoff-coupling hypothesis |
 | 28 | Long-run stability (100k ticks) | docs/experiments/long-run-stability.md | 5/5 seeds perfectly stationary at capacity 16 (0 deaths, 100k ticks); surplus-birthfreeze coexistence (intake-rate ceiling); movement hypothesis TESTED and REJECTED (mobile rule crashes: movement cost > supply density) |
+| 29 | Movement vs supply density / turnover equilibrium | docs/experiments/move-density.md | movement NEVER pays (crash at starvation, pointless at abundance); --divide-probe 1.0 flips ecology to OVERSHOOT-COLLAPSE-TURNOVER (8→256→17, deaths 239, max gen 10-12 — first multi-generation mutation accumulation) |
 
 ## Running an experiment
 

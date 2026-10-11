@@ -435,22 +435,26 @@ impl CognitionBackend for MobileReproducingRuleBackend {
                 })
         };
 
-        // Starvation is judged from OUTCOMES over ALL recent decisions
-        // (not just absorbs): at the equilibrium the subject mostly proposes
-        // DIVIDE (rejected — the genome threshold is not met) and each
-        // rejected decision still pays metabolism, so the reward SUM goes
-        // negative while the situation is unproductive. Restricting the
-        // window to ABSORBs fails here: absorbs are only proposed when the
-        // cell actually holds regen, so those memories are successes.
-        let recent_rewards: Vec<f32> = ctx
+        // Starvation is judged from ABSORB ATTEMPT OUTCOMES: the cell is
+        // "dead" when the subject recently TRIED to absorb at least twice
+        // and the attempt rewards sum to nothing. Two earlier designs fail:
+        // energy-level tests never fire (absorbs are only proposed when the
+        // cell holds regen, so absorb memories are successes), and
+        // all-decision reward sums ALWAYS fire at equilibrium — DIVIDE
+        // proposals get rejected because the GENOME threshold is not met,
+        // which says nothing about cell quality, so the subject would
+        // wander forever paying move costs (observed: total population
+        // crash in every regen regime). Absorb attempts are the only
+        // decision type whose outcome tracks the CELL.
+        let recent_absorbs: Vec<&crate::cognition::MemoryEntry> = ctx
             .memory
             .iter()
             .rev()
+            .filter(|m| m.action.name == "ABSORB")
             .take(self.starve_patience as usize)
-            .map(|m| m.reward_signal)
             .collect();
-        let cell_dead = recent_rewards.len() >= self.starve_patience as usize
-            && recent_rewards.iter().sum::<f32>() <= 0.0;
+        let cell_dead = recent_absorbs.len() >= 2
+            && recent_absorbs.iter().map(|m| m.reward_signal).sum::<f32>() <= 0.0;
 
         let (action, why) = if cell_dead {
             // MOVE params: (dx, dy) each 0..1 mapped to -1..=1 steps.

@@ -139,6 +139,16 @@ Last updated: 2026-10-11 (PR#52-#57 arc — memory ablation, signaling economics
   under the identical harness — post-migration behavior is model-dependent.
 - LLM integration (M7): granite4.1:3b-q4_K_M produced valid typed decisions
   in 80/80 cognition events on the reference GPU; zero schema rejections.
+- Turnover equilibrium (NEW REGIME, 5/5 seeds): `--divide-probe 1.0`
+  (keep foraging, keep proposing DIVIDE) flips the population from
+  frozen stability to OVERSHOOT-COLLAPSE-TURNOVER — 8→cap 256→starvation
+  crash→~17 equilibrium; lineages reach generation 10-12 (first
+  multi-generation mutation accumulation in the project)
+  (move-density.md). Movement itself never pays in this world: harmful
+  at starvation density (PR#69), pointless at abundance, and the
+  corrected mobile rule simply never needs to move in between. Cell
+  quality is only observable through absorb-outcome memory — a rule
+  that gates foraging on its own energy can never gather it.
 - Long-run stability (100k ticks, 5/5 seeds, reproducing-rule at the
   PR#65 threshold-6.0 regime): population perfectly stationary at the
   carrying capacity 16 (zero deaths), field surplus accumulates linearly

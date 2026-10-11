@@ -30,6 +30,7 @@ kept, and nothing here claims emergence.
 | 20 | LLM follower in the signaling world | docs/experiments/llm-signaling.md | OBSERVED n=3: null-signal (strength 0) is the LLM's cheap safe action; seed 99 sent real signals AND converged on the emitter (proximity 1.0); 3/3 survive |
 | 21 | Convention formation (2 LLM followers) | docs/experiments/convention-formation.md | OBSERVED NEGATIVE (n=1): both converge on null-signal, no interaction; rule emitter's signal also ignored at temp 0.3 |
 | 22 | Population world migration | docs/experiments/population-migration.md | OBSERVED: per-subject continuity spread 0.281 ± 0.418 across one boundary (energy-rule 0.0, echo 1.0, signal-seeker 0.125); determinism check passes |
+| 23 | Field-level carrying capacity | docs/experiments/carrying-capacity.md | OBSERVED: carrying capacity ≈ 13-16 organisms at regen 0.0005 (survivor count converges as initial population grows 8→48); field reaches supply=consumption steady state; births still zero under scarcity |
 
 ## Running an experiment
 

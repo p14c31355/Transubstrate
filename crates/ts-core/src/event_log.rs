@@ -57,6 +57,17 @@ pub enum EventPayload {
         to: String,
         tick: u64,
     },
+    /// Population-level sample (primordial runner): alive count, energy
+    /// totals, and the REAL field energy. Replaces the old hack of
+    /// smuggling population stats through SubjectState with subject_id
+    /// "POPULATION".
+    PopulationSampled {
+        tick: u64,
+        alive: u32,
+        total_energy: f32,
+        mean_energy: f32,
+        field_energy: f32,
+    },
     /// Experiment finished.
     ExperimentFinished { reason: String },
 }

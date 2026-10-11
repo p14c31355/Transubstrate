@@ -1228,6 +1228,17 @@ fn main() {
                         "seq={} MIGRATION t={tick} {dimension}: {from} -> {to}",
                         r.seq
                     ),
+                    EventPayload::PopulationSampled {
+                        tick,
+                        alive,
+                        mean_energy,
+                        field_energy,
+                        ..
+                    } => format!(
+                        "seq={} POPULATION t={tick} alive={alive} mean_energy={mean_energy:.2} \
+                         field={field_energy:.2}",
+                        r.seq
+                    ),
                     EventPayload::ExperimentFinished { reason } => {
                         format!("seq={} FINISHED: {reason}", r.seq)
                     }

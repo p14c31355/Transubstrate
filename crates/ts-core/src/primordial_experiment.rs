@@ -429,11 +429,15 @@ pub fn run_primordial(
                 },
                 field_energy,
             });
-            log.push(EventPayload::SubjectState {
-                subject_id: "POPULATION".into(),
+            log.push(EventPayload::PopulationSampled {
                 tick,
-                pos: (alive as u32, 0),
-                energy: total_energy,
+                alive: alive as u32,
+                total_energy,
+                mean_energy: samples
+                    .last()
+                    .map(|s: &PopulationSample| s.mean_energy)
+                    .unwrap_or(0.0),
+                field_energy,
             });
         }
 

@@ -135,8 +135,13 @@ the batch sweep runner all merged)
       manifest was written). Scarcity logs are thin (ExperimentStarted
       only) but verify/replay work on them; fuller scarcity event streams
       remain future work.
-- [ ] Regenerate population samples with real field_energy (extend
-      SubjectState POPULATION payload).
+- [x] Population samples with real field_energy: new `PopulationSampled`
+      event payload (tick, alive, total/mean energy, field_energy) replaces
+      the SubjectState "POPULATION" hack; replay regenerates the samples
+      WITH real field energy (old logs stay readable via the legacy
+      SubjectState path). Verified end-to-end: fresh run logs
+      field_energy 1293.6 → 8600.01 over 300 ticks and inspect renders
+      POPULATION rows.
 
 ## 5. M10 expansion
 

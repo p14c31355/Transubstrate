@@ -285,8 +285,13 @@ fn parse_primordial_backend(
             absorb_threshold: 0.3,
             mark_threshold: 0.8,
         }),
+        "mobile-reproducing" => Ok(PB::MobileReproducing {
+            absorb_threshold: 0.3,
+            divide_probe: 0.4,
+            starve_patience: 3,
+        }),
         other => Err(format!(
-            "unknown backend '{other}' (expected echo|random|energy-rule|reproducing-rule|signal-seeker|chem-marker)"
+            "unknown backend '{other}' (expected echo|random|energy-rule|reproducing-rule|signal-seeker|chem-marker|mobile-reproducing)"
         )),
     }
 }

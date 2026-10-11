@@ -99,6 +99,13 @@ the batch sweep runner all merged)
       decays (0.1/tick) and diffuses (0.05 to 4-neighbors) and has NO
       absorb payoff (meaning-free by construction; 3 new tests, 107 total)
       (docs/experiments/chemical-substrate.md).
+- [x] Long-run stability (GOAL §29 scale): 100k-tick runs, 5/5 seeds —
+      population frozen at capacity 16, zero deaths, field surplus ~29k
+      accumulates linearly; births freeze (intake-rate ceiling distinct
+      from the population cap). Mobile-rule variant TESTED: crashes under
+      this supply density — movement cost > regen rate, stationary waiting
+      is adaptive (docs/experiments/long-run-stability.md). Open: higher
+      regen regimes, mobile rules at higher density.
 - [x] Chemical-field meaning formation: detection instrument built —
       `WorldEvent::ChemicalMarked` (every channel-1 mark logged),
       `nearby_chemical_0` channel (4-neighbor gradient reach),

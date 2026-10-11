@@ -375,6 +375,110 @@ impl CognitionBackend for ReproducingRuleBackend {
     }
 }
 
+/// Mobile variant of the reproducing rule: behaves identically to
+/// ReproducingRuleBackend while the cell feeds it, but after `starve_patience`
+/// consecutive unproductive decisions (WAIT on a drained cell) it takes a
+/// RANDOM step to an adjacent cell. This is the minimal movement heuristic
+/// that requires NO extra observation channels: the subject only knows its
+/// own intake history. Tests the long-run-stability hypothesis that a
+/// stationary population cannot convert field surplus into growth, while a
+/// mobile one can (the world's MOVE action needs a direction param; the
+/// world resolves it; see primordial MOVE handling).
+#[derive(Clone, Debug)]
+pub struct MobileReproducingRuleBackend {
+    /// local_energy observation above which the rule absorbs.
+    pub absorb_threshold: f32,
+    /// local_energy observation above which the rule proposes DIVIDE.
+    pub divide_probe: f32,
+    /// Number of remembered ABSORB outcomes that must all be unproductive
+    /// (reward <= 0) before the rule takes a step.
+    pub starve_patience: u32,
+}
+
+impl MobileReproducingRuleBackend {
+    pub fn new(absorb_threshold: f32, divide_probe: f32, starve_patience: u32) -> Self {
+        Self {
+            absorb_threshold,
+            divide_probe,
+            starve_patience,
+        }
+    }
+}
+
+impl Default for MobileReproducingRuleBackend {
+    fn default() -> Self {
+        Self::new(0.3, 0.4, 3)
+    }
+}
+
+impl CognitionBackend for MobileReproducingRuleBackend {
+    fn implementation(&self) -> &'static str {
+        "rule-energy-divide-move-v0"
+    }
+
+    fn decide(&mut self, ctx: &DecisionContext) -> Result<Decision, CognitionError> {
+        let energy_seen = ctx
+            .observations
+            .iter()
+            .find(|o| o.channel == "local_energy")
+            .map(|o| o.value)
+            .unwrap_or(0.0);
+
+        let pick = |ctx: &DecisionContext, name: &str, params: Vec<f32>| {
+            ctx.manifest
+                .actions
+                .iter()
+                .find(|a| a.name == name)
+                .map(|schema| Action {
+                    name: schema.name.clone(),
+                    params: if schema.arity == 0 { vec![] } else { params },
+                })
+        };
+
+        // Starvation is judged from OUTCOMES over ALL recent decisions
+        // (not just absorbs): at the equilibrium the subject mostly proposes
+        // DIVIDE (rejected — the genome threshold is not met) and each
+        // rejected decision still pays metabolism, so the reward SUM goes
+        // negative while the situation is unproductive. Restricting the
+        // window to ABSORBs fails here: absorbs are only proposed when the
+        // cell actually holds regen, so those memories are successes.
+        let recent_rewards: Vec<f32> = ctx
+            .memory
+            .iter()
+            .rev()
+            .take(self.starve_patience as usize)
+            .map(|m| m.reward_signal)
+            .collect();
+        let cell_dead = recent_rewards.len() >= self.starve_patience as usize
+            && recent_rewards.iter().sum::<f32>() <= 0.0;
+
+        let (action, why) = if cell_dead {
+            // MOVE params: (dx, dy) each 0..1 mapped to -1..=1 steps.
+            // Cycle deterministically through the 4 directions from
+            // the tick (the context carries no RNG).
+            let step = (ctx.tick / self.starve_patience.max(1) as u64) % 4;
+            let (dx, dy) = match step {
+                0 => (1.0, 0.5), // +x
+                1 => (0.0, 1.0), // +y
+                2 => (1.0, 1.0), // +x +y
+                _ => (0.5, 0.0), // -x
+            };
+            (pick(ctx, "MOVE", vec![dx, dy]), "move (cell dead)")
+        } else if energy_seen >= self.divide_probe {
+            (pick(ctx, "DIVIDE", vec![]), "divide")
+        } else if energy_seen > self.absorb_threshold {
+            (pick(ctx, "ABSORB", vec![1.0]), "absorb")
+        } else {
+            (pick(ctx, "WAIT", vec![]), "wait")
+        };
+
+        Ok(Decision {
+            action,
+            rationale: format!("rule(repro+move): local_energy={energy_seen:.3} -> {why}"),
+        })
+    }
+}
+
 /// A deliberately broken backend used to test safe failure paths: it returns
 /// malformed/invalid decisions so the runtime must reject them without
 /// corrupting state.

@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-10-11 (PR#44 merged — memory_usage in both harnesses)
+Last updated: 2026-10-11 (PR#45-#47 arc — LLM memory_usage numbers recorded)
 
 ## What currently works (all OBSERVED, verified on this repository's CI + local runs)
 
@@ -133,10 +133,11 @@ Last updated: 2026-10-11 (PR#44 merged — memory_usage in both harnesses)
   LLM subject (effect ±0.0); adaptation to a world change is OBSERVED only
   via outcome learning at temp 0.7 (PR#37), not via manifest-channel
   adaptation.
-- Memory USE after a swap is OBSERVED at temp 0.7 (learning loop) but not
-  yet at temperature 0; the memory_usage dimension now measures it, but
-  LLM-run usage numbers have not yet been recorded (rule/echo calibrations
-  only so far).
+- Memory USE after a swap: LLM numbers now recorded (PR#47 record,
+  temp 0.3 n=5): 4/5 seeds usage 1.0 (boundary memory re-enacted;
+  swap-robust), 1 seed 0.0 across all three dimensions (full strategy
+  replacement ABSORB→SIGNAL — the outcome-learning loop visible in the
+  vector). At temperature 0 the learning loop remains untested.
 - No machine/process migration yet.
 - Multi-seed statistics exist for the rule→LLM migration (5 seeds),
   PR#12 competition (5 seeds), the LLM world migration (5 seeds), outcome

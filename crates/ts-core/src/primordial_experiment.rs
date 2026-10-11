@@ -225,6 +225,10 @@ pub fn run_primordial(
     };
     let mut samples: Vec<PopulationSample> = Vec::new();
     let mut cognition_events_total: u128 = 0;
+    // Per-subject bounded memory (M11): last N decisions with reward signals.
+    let mut memories: std::collections::BTreeMap<String, Vec<crate::cognition::MemoryEntry>> =
+        std::collections::BTreeMap::new();
+    const MEMORY_LIMIT: usize = 8;
 
     for tick in 0..config.ticks {
         // Cognition phase (before world tick): every living organism decides.
@@ -246,7 +250,7 @@ pub fn run_primordial(
                     energy: sref.energy,
                     observations,
                     manifest: world.manifest().clone(),
-                    memory: vec![], // per-subject memory arrives with M5
+                    memory: memories.get(sid).cloned().unwrap_or_default(),
                 };
                 let backend = backends.get_mut(sid).expect("backend registered at spawn");
                 let decision = match backend.decide(&ctx) {
@@ -292,6 +296,21 @@ pub fn run_primordial(
                     tick,
                     decision: decision.clone(),
                 });
+                // Record decision into bounded per-subject memory (M11).
+                {
+                    let mem = memories.entry(sid.clone()).or_default();
+                    if mem.len() >= MEMORY_LIMIT {
+                        mem.remove(0);
+                    }
+                    mem.push(crate::cognition::MemoryEntry {
+                        tick,
+                        action: decision.action.clone().unwrap_or(Action {
+                            name: "WAIT".into(),
+                            params: vec![],
+                        }),
+                        reward_signal: 0.0, // reward wiring below (post-tick)
+                    });
+                }
                 if let Some(action) = decision.action {
                     actions.push((sid.clone(), action));
                 }
@@ -356,14 +375,26 @@ pub fn run_primordial(
                     org.subject_id.clone(),
                     config.organism.backend.instantiate(),
                 );
+                // Children start with empty bounded memory (M11).
+                memories.entry(org.subject_id.clone()).or_default();
             }
         }
 
-        // Sync SubjectRef energies from the world (the runner-side view).
+        // Sync SubjectRef energies from the world (the runner-side view) and
+        // record reward signals into memory: reward = energy delta from the
+        // decision's pre-tick energy (M11 reward wiring).
         for (sid, sref) in subjects.iter_mut() {
             if let Some(org) = world.organism(sid) {
+                let pre_energy = sref.energy;
                 sref.energy = org.energy;
                 sref.pos = org.pos;
+                let last = memories
+                    .get_mut(sid)
+                    .and_then(|mem| mem.last_mut())
+                    .filter(|last| last.reward_signal == 0.0);
+                if let Some(last) = last {
+                    last.reward_signal = org.energy - pre_energy;
+                }
             }
         }
 

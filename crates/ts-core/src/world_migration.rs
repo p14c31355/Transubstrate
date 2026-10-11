@@ -91,6 +91,27 @@ pub fn run_world_migration(
     config: &WorldMigrationConfig,
     log_path: &Path,
 ) -> Result<crate::continuity::ContinuityVector, CognitionError> {
+    run_world_migration_inner(config, log_path, None)
+}
+
+/// Same as [`run_world_migration`], but the pre-swap phase REPLAYS the given
+/// decisions (tick -> decision) instead of asking the backend. Used by the
+/// same-trajectory ablation: the wipe arm replays the carry arm's pre-swap
+/// decisions so both arms share an identical pre-phase trajectory, and the
+/// carry − wipe contrast isolates the causal effect of the carried memory.
+pub fn run_world_migration_with_replay(
+    config: &WorldMigrationConfig,
+    log_path: &Path,
+    pre_decisions: &std::collections::BTreeMap<u64, crate::cognition::Decision>,
+) -> Result<crate::continuity::ContinuityVector, CognitionError> {
+    run_world_migration_inner(config, log_path, Some(pre_decisions))
+}
+
+fn run_world_migration_inner(
+    config: &WorldMigrationConfig,
+    log_path: &Path,
+    pre_replay: Option<&std::collections::BTreeMap<u64, crate::cognition::Decision>>,
+) -> Result<crate::continuity::ContinuityVector, CognitionError> {
     let mut log = EventLog::new(8192)
         .with_sink(log_path)
         .map_err(|e| CognitionError::Unavailable(format!("log sink: {e}")))?;
@@ -157,18 +178,43 @@ pub fn run_world_migration(
         if let Some((pos, energy)) = cand {
             sref.pos = pos;
             sref.energy = energy;
-            let observations = origin
-                .observe(&sref)
-                .map_err(|e| CognitionError::Unavailable(format!("observe failed: {e}")))?;
-            let ctx = DecisionContext {
-                subject_id: sid_str.clone(),
-                tick,
-                energy: sref.energy,
-                observations,
-                manifest: origin.manifest().clone(),
-                memory: memory.clone(),
+            // Same-trajectory ablation: when a pre-swap decision replay is
+            // supplied for this tick, use it verbatim (no backend call) so
+            // the pre-phase trajectory is identical across arms. The post-
+            // swap phase (origin world is only the first half) always asks
+            // the backend.
+            let decision = if tick < half {
+                match pre_replay.and_then(|m| m.get(&tick)) {
+                    Some(replay) => replay.clone(),
+                    None => {
+                        let observations = origin.observe(&sref).map_err(|e| {
+                            CognitionError::Unavailable(format!("observe failed: {e}"))
+                        })?;
+                        let ctx = DecisionContext {
+                            subject_id: sid_str.clone(),
+                            tick,
+                            energy: sref.energy,
+                            observations,
+                            manifest: origin.manifest().clone(),
+                            memory: memory.clone(),
+                        };
+                        backend.decide(&ctx)?
+                    }
+                }
+            } else {
+                let observations = origin
+                    .observe(&sref)
+                    .map_err(|e| CognitionError::Unavailable(format!("observe failed: {e}")))?;
+                let ctx = DecisionContext {
+                    subject_id: sid_str.clone(),
+                    tick,
+                    energy: sref.energy,
+                    observations,
+                    manifest: origin.manifest().clone(),
+                    memory: memory.clone(),
+                };
+                backend.decide(&ctx)?
             };
-            let decision = backend.decide(&ctx)?;
             crate::cognition::validate_decision(origin.manifest(), &decision)?;
             crate::cognition::charge_cognition(
                 &mut ledger,
@@ -370,16 +416,38 @@ pub fn run_world_migration_experiment(
     let control_path = log_path.with_extension("control.jsonl");
     let control_continuity = run_world_control(config, &control_path)?;
 
-    // ---- Ablation arm (memory_carry = false only): the same migration
-    // with the boundary wipe. Its own log keeps replay independence.
-    // memory_carry=false in `config` means `continuity` IS the ablation
-    // run, so the arm runs only in the default carry mode.
+    // ---- Ablation arm (memory_carry = true only): the same migration
+    // with the boundary wipe AND the carry arm's pre-swap decisions
+    // REPLAYED verbatim, so both arms share an identical pre-phase
+    // trajectory and the carry − wipe contrast isolates the causal effect
+    // of the carried memory (LLM sampling noise cannot disguise itself as
+    // a pre-phase trajectory difference). Its own log keeps replay
+    // independence. memory_carry=false in `config` means `continuity` IS
+    // the ablation run, so the arm runs only in the default carry mode.
     let (ablation_continuity, ablation_effect) = if config.memory_carry {
+        // Extract the carry arm's pre-swap decisions from its event log.
+        let records = crate::event_log::read_log(log_path)
+            .map_err(|e| CognitionError::Unavailable(format!("ablation replay: {e}")))?;
+        let mut pre_decisions: std::collections::BTreeMap<u64, crate::cognition::Decision> =
+            std::collections::BTreeMap::new();
+        let half = config.ticks / 2;
+        for rec in &records {
+            let made = match &rec.payload {
+                EventPayload::DecisionMade { tick, decision, .. } if *tick < half => {
+                    Some((*tick, decision))
+                }
+                _ => None,
+            };
+            if let Some((tick, decision)) = made {
+                pre_decisions.insert(tick, decision.clone());
+            }
+        }
         let mut ablated_config = config.clone();
         ablated_config.memory_carry = false;
         ablated_config.experiment_id = ExperimentId::generate();
         let ablation_path = log_path.with_extension("ablation.jsonl");
-        let ablated = run_world_migration(&ablated_config, &ablation_path)?;
+        let ablated =
+            run_world_migration_with_replay(&ablated_config, &ablation_path, &pre_decisions)?;
         let mut effect_dims = Vec::new();
         for (carried, wiped) in continuity.dimensions.iter().zip(ablated.dimensions.iter()) {
             effect_dims.push(ContinuityDimension {
@@ -666,6 +734,73 @@ mod tests {
         assert!(
             decisions.iter().any(|t| *t >= half),
             "post-migration decisions missing"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn same_trajectory_replay_reproduces_pre_phase_exactly() {
+        // The same-trajectory ablation relies on the replay producing an
+        // IDENTICAL pre-phase trajectory: same decisions, same world events.
+        // With the deterministic echo backend, replaying the extracted
+        // decisions must reproduce the original run bit-for-bit up to the
+        // midpoint — proving the replay mechanism is faithful.
+        let cfg = WorldMigrationConfig {
+            backend: crate::primordial_experiment::BackendKind::Echo,
+            ..WorldMigrationConfig::default()
+        };
+        let dir = std::env::temp_dir().join(format!(
+            "ts-wmig-replay-{}-{}",
+            std::process::id(),
+            cfg.experiment_id
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let log_path = dir.join("events.jsonl");
+        run_world_migration(&cfg, &log_path).unwrap();
+
+        // Extract pre-swap decisions exactly like the experiment runner does.
+        let records = crate::event_log::read_log(&log_path).unwrap();
+        let half = cfg.ticks / 2;
+        let mut pre_decisions: std::collections::BTreeMap<u64, crate::cognition::Decision> =
+            std::collections::BTreeMap::new();
+        for rec in &records {
+            let made = match &rec.payload {
+                EventPayload::DecisionMade { tick, decision, .. } if *tick < half => {
+                    Some((*tick, decision))
+                }
+                _ => None,
+            };
+            if let Some((tick, decision)) = made {
+                pre_decisions.insert(tick, decision.clone());
+            }
+        }
+        assert!(!pre_decisions.is_empty(), "no pre decisions extracted");
+
+        // Replay them in a fresh world (wipe arm conditions).
+        let mut replay_cfg = cfg.clone();
+        replay_cfg.memory_carry = false;
+        replay_cfg.experiment_id = ExperimentId::generate();
+        let replay_path = dir.join("events.replay.jsonl");
+        run_world_migration_with_replay(&replay_cfg, &replay_path, &pre_decisions).unwrap();
+
+        // The pre-phase decision sequence must match exactly.
+        let replay_records = crate::event_log::read_log(&replay_path).unwrap();
+        let replay_pre: Vec<_> = replay_records
+            .iter()
+            .filter_map(|r| match &r.payload {
+                EventPayload::DecisionMade { tick, decision, .. } if *tick < half => {
+                    Some((*tick, decision.action.clone()))
+                }
+                _ => None,
+            })
+            .collect();
+        let original_pre: Vec<_> = pre_decisions
+            .iter()
+            .map(|(t, d)| (*t, d.action.clone()))
+            .collect();
+        assert_eq!(
+            original_pre, replay_pre,
+            "replayed pre-phase must reproduce the original decisions exactly"
         );
         let _ = std::fs::remove_dir_all(&dir);
     }

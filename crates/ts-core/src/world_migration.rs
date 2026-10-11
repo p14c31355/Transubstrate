@@ -311,6 +311,7 @@ pub fn run_world_migration(
                 &post_collector.fingerprint(),
             ),
             ContinuityVector::memory_retention(&memory_pre, &memory),
+            ContinuityVector::memory_usage(&memory_pre, &post_collector.distinct_action_names()),
         ],
     })
 }
@@ -506,6 +507,21 @@ fn run_world_control(
                     computation: format!(
                         "control: buffer rolls normally (len at midpoint window end \
                          {memory_pre_len}, end {memory_now_len}); no swap occurred"
+                    ),
+                }
+            },
+            // Control memory usage: with no swap, any re-enacted action is
+            // by definition consistent with the rolling buffer; report 1.0
+            // with a documenting computation (no swap = nothing to lose).
+            {
+                let post_n = post_collector.distinct_action_names().len();
+                ContinuityDimension {
+                    name: "memory_usage".into(),
+                    value: 1.0,
+                    computation: format!(
+                        "control: no swap occurred (buffer_n={}, post_actions_n={post_n}); \
+                         nothing to lose — usage is trivially continuous",
+                        memory.len()
                     ),
                 }
             },

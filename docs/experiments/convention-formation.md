@@ -58,9 +58,34 @@ becoming an actual interaction.
   choose to go there — the rule followers do, the LLM at temp 0.3 does
   not).
 
+## TEMPERATURE-0.7 ARM (OBSERVED, n=3 seeds, 2 LLM followers each)
+
+| seed | subject | SIGNAL params | proximity | final | alive |
+|------|---------|--------------|-----------|-------|-------|
+| 42   | both    | 0.0 ×600     | 0.000     | 90.00 | true  |
+| 7    | both    | 0.0 ×600     | 0.000     | 90.00 | true  |
+| 99   | cog-00  | 0.0×522, 0.1×77, 0.5×1 | 1.000 | 84.41 | true |
+| 99   | cog-01  | 0.0 ×600     | 0.000     | 90.00 | true  |
+
+- **The null-signal is temperature-robust**: 5/6 subject-seeds emit only
+  strength 0.0 even at temp 0.7. The null-signal is not a temp-0.3
+  attractor; it is the equilibrium strategy in a world where signals
+  carry no perceivable consequence to the sender or receiver.
+- **Seed 99 replicates**: one subject again sent real signals (0.1 ×77)
+  AND converged on the emitter (proximity 1.000) — the same seed-specific
+  pattern as the single-follower run. Seed 99's ring placement likely
+  makes the emitter's gradient perceivable early.
+- 6/6 subjects survive across both temperatures.
+- **Conclusion (INFERENCES)**: convention formation did not occur across
+  4 seeds × 2 temperatures. For listeners to respond, the WORLD economy
+  must couple received signals to payoff (e.g. absorbable energy that
+  appears only at recently-signaled nodes) — a world-design change that
+  would pre-define SIGNAL's meaning structurally and narrow any
+  subsequent emergence claim; that trade-off is now explicit.
+
 ## CAVEATS
 
-- n=1 seed for the two-subject run; deterministic per seed but the LLM is
-  stochastic at temp 0.3.
+- n=1 seed at temp 0.3, n=3 seeds at temp 0.7 (6 subject-runs total);
+  deterministic per seed but the LLM is stochastic.
 - No claim that conventions cannot form — only that they did not form
   here, with this model, at this temperature, in this world.

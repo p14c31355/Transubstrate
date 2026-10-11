@@ -142,3 +142,28 @@ All notable changes to Transubstrate are documented here.
   parameters (negative result disclosed)
 - Experiment records: temperature sweep matrix (0.3/0.7/1.0),
   signaling-follower detection, experiment index row 18
+
+### Added (PR#52-#57, merged)
+- Memory ablation — causal carry-vs-wipe at the migration boundary:
+  `memory_carry: bool` + boundary wipe in BOTH harnesses, `--no-memory`
+  CLI flag, per-seed ablation arm in `sweep-world-migration` (carry −
+  wipe effect in the JSON summary); rule calibration 0.0 (true negative);
+  same-trajectory refinement: the wipe arm REPLAYS the carry arm's
+  pre-swap decisions (5/5 seeds pre-phase exactly matched) — LLM n=5:
+  behavioral +0.68 / retention +0.60 / usage +1.00; wipe arms jump to
+  uniform SIGNAL saturation — memory causally shapes post-swap strategy
+- Survival-tuned follower run: sweep-sized energy budget (40 units) —
+  5/6 followers survive 600 ticks in 5/5 seeds, intake ~2.6× null
+- Signal-gradient observation: `nearby_signal_left`/`right` channels —
+  followers converge on the emitter (proximity 0.98-0.997); EMERGENT
+  carrying capacity (2/6 survive at the beacon — node capacity caps
+  co-residency); cue (signal diffusion) separable from payoff (pull
+  energy)
+- Multi-subject LLM signaling (`run_llm_signaling` + signal_strengths
+  histogram): granite n=3 — 3/3 survive; NULL-SIGNAL discovery (SIGNAL
+  strength 0.0 is the LLM's cheap safe action, 2/3 seeds); seed 99 sent
+  real signals (0.2 ×122) AND converged on the emitter (proximity 1.0)
+- Convention-formation harness (`run_cognitive_signaling`, repeated
+  `--backend` flags): first attempt NEGATIVE (n=1) — two LLM followers
+  independently converge on the null-signal, no interaction, rule
+  emitter's signal ignored at temp 0.3; temp-0.7 arm queued

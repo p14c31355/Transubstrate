@@ -33,6 +33,7 @@ kept, and nothing here claims emergence.
 | 23 | Field-level carrying capacity | docs/experiments/carrying-capacity.md | OBSERVED: carrying capacity ≈ 13-16 organisms at regen 0.0005 (survivor count converges as initial population grows 8→48); field reaches supply=consumption steady state; births still zero under scarcity |
 | 24 | Reproduction under binding scarcity | docs/experiments/repro-scarcity.md | OBSERVED: threshold 6.0 → population doubles 8→16 and stabilizes AT the carrying capacity; 3.0-5.0 = over-reproduction collapse; mutation-floor fix was the precondition (fixed 20..100 clamp silently gated low-threshold lineages) |
 | 25 | Chemical substrate activated | docs/experiments/chemical-substrate.md | ENGINEERING: RELEASE channel 1 converts energy to chemical (no payoff, sense-only); decay + diffusion live; 3 tests — meaning-formation experiment now possible |
+| 26 | Observation adaptation | docs/experiments/observation-adaptation.md | lag+persistence decision-stream metric: rule lag 0 (stable), granite 0.3 2/5 lag 50-100 persist, temp 1.0 lag 0 (flail), qwen 1/5 non-persisting switch |
 
 ## Running an experiment
 

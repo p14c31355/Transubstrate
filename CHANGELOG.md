@@ -167,3 +167,31 @@ All notable changes to Transubstrate are documented here.
   `--backend` flags): first attempt NEGATIVE (n=1) — two LLM followers
   independently converge on the null-signal, no interaction, rule
   emitter's signal ignored at temp 0.3; temp-0.7 arm queued
+
+### Added (PR#58-#67, merged)
+- Temperature-0.7 convention arm: null-signal is temperature-robust
+  (5/6 subject-seeds unchanged across 0.3/0.7); convention formation
+  NOT observed in 4 seeds × 2 temps; coupling received-signal→payoff
+  would pre-define meaning and is consciously NOT introduced
+- Population world migration (`run-population-migration`): 4-member
+  mixed-backend population, per-subject continuity spread 0.281±0.418
+- Manifest emission verified across all harnesses; scarcity CLI now
+  writes event logs (`--seeds` flag added)
+- PopulationSampled event: real field_energy in population samples
+  (replaces the (alive,0) SubjectState hack; old logs replay compatibly)
+- Carrying capacity (`--regen`): regen 0.0005 binds at ≈13-16 organisms;
+  field stabilizes 400-600
+- Reproduction under binding scarcity + mutation-floor fix:
+  Genome::mutate no longer silently clamps low division thresholds
+  (min(20, parent)); threshold 6.0 → 16 survivors 0 deaths (grows 8→16
+  to the capacity limit); 3.0-5.0 = over-reproduction collapse — divide
+  threshold is a life-history gene
+- Chemical substrate (RELEASE channel 1): arity 2 matching the GOAL §6
+  vocabulary — converts organism energy into the cell's chemical field;
+  decay 0.1 + 4-neighbor diffusion 0.05; NO absorb payoff (meaning-free
+  by construction); the M3-era sealed substrate is finally writable
+- Observation adaptation (`compute_observation_adaptation`): lag_ticks +
+  new_action + persists from the decision stream (10-decision windows);
+  rule calibration lag 0 stable; granite 0.3 2/5 adapt (lag 50-100,
+  persist); temp 1.0 lag-0 switches separated from learning via the
+  persistence flag; qwen 1/5 switch reverts

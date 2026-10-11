@@ -195,6 +195,14 @@ All notable changes to Transubstrate are documented here.
   rule calibration lag 0 stable; granite 0.3 2/5 adapt (lag 50-100,
   persist); temp 1.0 lag-0 switches separated from learning via the
   persistence flag; qwen 1/5 switch reverts
+- Movement vs supply density + turnover equilibrium: mobile-rule
+  starvation detector redesigned twice (energy tests never fire;
+  all-decision sums always fire — a rejected DIVIDE says nothing about
+  cell quality; absorb-attempt outcomes are the only cell-quality
+  signal); `--divide-probe` CLI flag; movement NEVER pays in this world;
+  probe 1.0 flips the ecology to overshoot-collapse-turnover
+  (8→cap 256→~17; deaths 239; max generation 10-12 — the first
+  multi-generation mutation accumulation)
 - Long-run stability (100k ticks × 5 seeds): population perfectly
   stationary at the carrying capacity (0 deaths); field surplus
   accumulates ~29k while births freeze — an intake-rate ceiling distinct

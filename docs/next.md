@@ -99,6 +99,19 @@ the batch sweep runner all merged)
       decays (0.1/tick) and diffuses (0.05 to 4-neighbors) and has NO
       absorb payoff (meaning-free by construction; 3 new tests, 107 total)
       (docs/experiments/chemical-substrate.md).
+- [x] Movement vs supply density + turnover equilibrium: movement is
+      dominated by waiting in every regime (crash at starvation, no gain
+      at abundance); two starvation-detector design bugs fixed (energy
+      tests never fire; all-decision reward sums always fire — DIVIDE
+      rejections say nothing about cell quality). `--divide-probe` added:
+      probe 1.0 = overshoot-collapse-turnover (8→256→17, deaths 239,
+      max generation 10-12 — first mutation accumulation across
+      generations) (docs/experiments/move-density.md).
+- [ ] Genome drift over the 12-generation lineages: genome_at_birth is
+      recorded in the lineage tree; analyze whether the threshold-6.0
+      founder lineage drifts, and whether any drift re-enters the
+      collapse regime (GOAL §8 genetic transmission, first testable
+      data).
 - [x] Long-run stability (GOAL §29 scale): 100k-tick runs, 5/5 seeds —
       population frozen at capacity 16, zero deaths, field surplus ~29k
       accumulates linearly; births freeze (intake-rate ceiling distinct

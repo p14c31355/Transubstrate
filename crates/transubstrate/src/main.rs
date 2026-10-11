@@ -72,6 +72,13 @@ enum Commands {
         /// chemical substrate; the rest observe it). 0 = all `--backend`.
         #[arg(long, default_value_t = 0)]
         markers: usize,
+        /// local_energy observation above which reproducing/mobile rules
+        /// propose DIVIDE (default 0.4 = raw energy 4.0). Raising it forces
+        /// more ABSORB attempts — the probe gates when the rule stops
+        /// foraging, which decides whether cell-quality signal (absorb
+        /// failures) can accumulate in memory at all.
+        #[arg(long, default_value_t = 0.4)]
+        divide_probe: f32,
         /// LLM sampling temperature (llm: backends only; 0 = deterministic).
         #[arg(long, default_value_t = 0.0)]
         llm_temperature: f32,
@@ -411,6 +418,7 @@ fn main() {
             regen,
             divide_threshold,
             markers,
+            divide_probe,
             llm_temperature,
             out,
         } => {
@@ -420,6 +428,27 @@ fn main() {
                     eprintln!("{e}");
                     std::process::exit(2);
                 }
+            };
+            // Apply the CLI divide probe to the foraging rules that expose
+            // it (the probe gates when the rule stops foraging).
+            let backend_kind = match backend_kind {
+                ts_core::primordial_experiment::BackendKind::ReproducingRule {
+                    absorb_threshold,
+                    divide_probe: _,
+                } => ts_core::primordial_experiment::BackendKind::ReproducingRule {
+                    absorb_threshold,
+                    divide_probe,
+                },
+                ts_core::primordial_experiment::BackendKind::MobileReproducing {
+                    absorb_threshold,
+                    divide_probe: _,
+                    starve_patience,
+                } => ts_core::primordial_experiment::BackendKind::MobileReproducing {
+                    absorb_threshold,
+                    divide_probe,
+                    starve_patience,
+                },
+                other => other,
             };
             let config = ts_core::primordial_experiment::PrimordialExperimentConfig {
                 experiment_id: ExperimentId::generate(),

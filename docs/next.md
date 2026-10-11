@@ -3,70 +3,64 @@
 Practical continuation queue. Each item is sized for one branch/PR.
 Order reflects current value assessment; revisit after each merge.
 
-## 1. Finish M1 documentation (in progress)
+Last updated: 2026-10-11 (after PR#19 — M0-M11, M9, M10, M11 all merged;
+scarcity/competition experiments merged)
 
-- [ ] docs/prior-art.md — write from the verified source list already
-      collected (OpenLife arXiv:2606.31046, Lenia, Generative Agents
-      arXiv:2304.03442, Shachi arXiv:2509.21862, AlphaEvolve, MemGPT/Letta
-      arXiv:2310.08560, W3C WoT TD 1.1, ROS2/ros2_control, Viam, MCP,
-      autopoiesis S0303264723001119, Parfit; UNVERIFIED: Exuvia, Enoch,
-      OpenRGD). Note: two delegated survey attempts died on API timeouts;
-      write it directly from the collected sources.
-- [ ] docs/research-questions.md — pin down the three Goal questions with
-      operational definitions and falsifiable experiment designs.
-- [ ] docs/architecture.md — describe what actually exists now (crates,
-      traits, data flow) plus the WABIX v0 spec and its versioning policy.
-- [ ] docs/continuity.md — document the continuity vector, dimensions, and
-      the control methodology; keep separate from architecture.
-- [ ] docs/resource-model.md — ledger semantics, cost model, cognition
-      cadence economics.
+## 1. M11 continuation — memory retention continuity (highest value)
 
-## 2. M7 — Local LLM cognition backend (next major milestone)
+- [x] Per-subject memory in the primordial population runner: the bounded
+      `memories` map is wired (PR#17) — LLM organisms reason over past
+      decisions + reward signals.
+- [ ] Memory-retention continuity dimension: fingerprint memory state
+      before/after backend swap in the migration harness; add
+      `memory_retention` dimension to ContinuityVector.
+- [x] Migration harness carries the SAME memory buffer across the migration
+      boundary (memory belongs to the subject, not the backend).
+- [ ] LLM prompt already renders memory entries — verify end-to-end with
+      granite4.1:3b-q4_K_M and record decision quality vs memory length.
+- [ ] Multi-seed statistics for the LLM migration effect (n>=5, report
+      mean ± sd; stop single-run anecdotes).
 
-- [ ] Add `llama-cpp` backend behind the CognitionBackend trait:
-      shared model instance, per-decision bounded context, typed decision
-      extraction (JSON mode or constrained grammar), token cost reporting
-      into the resource ledger.
-- [ ] 8 GiB VRAM contract: single shared model, ≤3B quantized (Q4_K_M class),
-      batch=1, CPU fallback path. Expose a resource profile concept.
-- [ ] Cognition cadence economics: measure organism-count vs cognition-event
-      cost; document that VRAM does not scale with organism count.
-- [ ] Safe failure: malformed model output → logged rejection (already typed
-      via CognitionError; test with real model output).
-- [ ] Model acquisition docs (user downloads gguf; never committed).
+## 2. Research experiments
 
-## 3. M8 — Real model migration experiment
-
-- [ ] Run rule-backend → local-LLM-backend migration on the existing
-      harness; first migration where continuity measurement is scientifically
-      meaningful (the backend carries per-subject memory).
-- [ ] Add per-subject memory to the LLM backend path (bounded, summarized);
-      measure memory-retention dimension in the continuity vector.
-- [ ] Multi-seed statistics: run N seeds, report mean ± spread of migration
-      effect; stop reporting single-run anecdotes.
-
-## 4. Primordial world research experiments
-
-- [ ] Carrying capacity: tune regen vs consumption so the field actually
-      binds (currently regen dominates); rerun reproduction experiments.
-- [ ] Genome evolution under selection: does absorb_affinity drift when
-      energy is scarce? Define 'observed adaptation' operationally first.
+- [x] Scarcity/drift: NEGATIVE RESULT at default mutation (drift +0.0006,
+      below ±0.02 band) — PR#11. Knobs documented: stronger mutation,
+      longer runs, sharper fitness differential.
+- [x] Two-phenotype competition: POSITIVE selection measured — shareA 0.759
+      mean, 5/5 seeds, mechanism confirmed (PR#12).
 - [ ] Signaling-convention detection: with signal cost > 0, do organisms
       that signal near resource acquire followers? Define detection metric
       before running.
 - [ ] Chemical-field meaning formation (the semantics-free substrate is
       currently unused by controllers).
+- [ ] Carrying capacity: tune regen vs consumption so the field actually
+      binds (currently regen dominates at 0.01/cell/tick); rerun
+      reproduction experiments under binding scarcity.
 
-## 5. Infrastructure
+## 3. M9 continuation — world migration experiments
 
-- [ ] Emit ExperimentManifest automatically next to every event log
-      (manifest is defined; emission not wired).
+- [ ] World-migration experiment with LLM cognition: subject migrates
+      primordial → network mid-run; measure adaptation (action distribution
+      shift) and continuity against a same-world control.
+- [ ] Observation-adaptation metric: how quickly does behavior adapt to the
+      new manifest's channel names (node_energy vs local_energy)?
+
+## 4. Infrastructure
+
+- [ ] Emit ExperimentManifest automatically next to every event log for
+      the migration and scarcity harnesses (test/primordial already emit;
+      migration/scarcity emission verified wired — verify with a fresh run).
 - [ ] Regenerate population samples with real field_energy (extend
       SubjectState POPULATION payload).
-- [ ] Second world (M9): a structurally different WABIX world (e.g.
-      continuous space or network world) for world-migration experiments.
 - [ ] Consider `worlds/` + `experiments/` layout split only when crate
       boundaries actually demand it (avoid directory theater).
+
+## 5. M10 expansion
+
+- [ ] Record endpoint model metadata (VRAM footprint) in the benchmark
+      report when the endpoint exposes it.
+- [ ] Cognition throughput for the LLM backend (decisions/sec, tokens/sec)
+      as a benchmark section.
 
 ## Explicitly deferred (do not start without revisiting)
 

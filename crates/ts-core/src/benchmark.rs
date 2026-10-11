@@ -101,6 +101,46 @@ fn bench_mock_cognition(_organisms: u32, decisions: u64) -> (f64, u64) {
     (decisions as f64 / elapsed, decisions)
 }
 
+/// LLM cognition throughput: decisions/sec against the configured endpoint
+/// (default localhost Ollama). Requires a running endpoint; the benchmark
+/// degrades gracefully (section omitted) when the endpoint is unreachable.
+fn bench_llm_cognition(model: &str, decisions: u64) -> Option<(f64, u64, f64, f64)> {
+    use crate::cognition::{CognitionBackend, DecisionContext};
+
+    let cfg = crate::llm_backend::LlmBackendConfig {
+        model: model.to_string(),
+        ..Default::default()
+    };
+    // Health check: a single quick decision probe; unreachable endpoints
+    // are reported as None so the benchmark degrades gracefully.
+    let mut backend = crate::llm_backend::LlmBackend::new(cfg.clone());
+    let manifest = crate::primordial::primordial_manifest();
+    let ctx = DecisionContext {
+        subject_id: "bench-llm".into(),
+        tick: 0,
+        energy: 50.0,
+        observations: vec![crate::wabix::Observation::new("local_energy", 0.5)],
+        manifest: manifest.clone(),
+        memory: vec![],
+    };
+    let probe_start = Instant::now();
+    let probe_result = CognitionBackend::decide(&mut backend, &ctx);
+    let probe_elapsed = probe_start.elapsed().as_secs_f64();
+    if probe_result.is_err() {
+        return None;
+    }
+
+    // Skip the probe decision from throughput math; measure `decisions` more.
+    let start = Instant::now();
+    for _ in 0..decisions {
+        let _ = CognitionBackend::decide(&mut backend, &ctx);
+    }
+    let elapsed = start.elapsed().as_secs_f64();
+    let dps = decisions as f64 / elapsed;
+    let latency = (elapsed / decisions as f64) * 1000.0;
+    Some((dps, decisions, latency, probe_elapsed))
+}
+
 /// Run the reference-8gb benchmark.
 pub fn run_benchmark() -> BenchmarkReport {
     let mut sections = Vec::new();
@@ -124,6 +164,26 @@ pub fn run_benchmark() -> BenchmarkReport {
             value: dps,
             unit: "decisions/s".into(),
             params: serde_json::json!({ "backend": "mock-echo-v0", "decisions": decisions }),
+        });
+    }
+
+    // --- LLM cognition throughput (decisions/sec + latency, if endpoint up) ---
+    let llm_model = std::env::var("TS_BENCH_LLM_MODEL").ok();
+    let llm_bench = llm_model.and_then(|var| {
+        bench_llm_cognition(&var, 10)
+            .map(|(dps, decisions, latency_ms, probe_s)| (var, dps, decisions, latency_ms, probe_s))
+    });
+    if let Some((var, dps, decisions, latency_ms, probe_s)) = llm_bench {
+        sections.push(BenchmarkSection {
+            name: "llm_decisions_per_sec".into(),
+            value: dps,
+            unit: "decisions/s".into(),
+            params: serde_json::json!({
+                "model": var,
+                "decisions": decisions,
+                "mean_latency_ms": latency_ms,
+                "probe_load_s": probe_s
+            }),
         });
     }
 

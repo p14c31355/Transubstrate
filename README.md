@@ -137,6 +137,10 @@ Measures world tick throughput (1/8/32 organisms), mock cognition throughput,
 peak host RAM, and event log size. See [docs/status.md](docs/status.md) for
 measured numbers.
 
+Optionally, set `TS_BENCH_LLM_MODEL=<model>` to also measure local LLM
+cognition throughput (decisions/sec, mean latency). The section is omitted
+when no endpoint is reachable, so the benchmark stays CI-safe.
+
 ## License
 
 Apache-2.0. See [LICENSE](LICENSE).

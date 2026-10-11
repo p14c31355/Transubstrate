@@ -51,13 +51,41 @@ Attraction wins 5/5 seeds; intake wins 5/5 seeds (≈2.1× the null intake).
   measured is that the MECHANISM supplies the payoff a convention would
   exploit.
 
-## FOLLOW-UP (queued)
+## FOLLOW-UP (queued → done in the survival-tuned run, PR arc below)
 
-- Survival-tuned run: higher follower start energy, fewer HOPs (larger
-  emitter signal radius or stronger pull), or follower-side harvesting at
-  pull-concentrated neighbor nodes, so followers survive past the first
-  circuit of the ring.
+- ~~Survival-tuned run~~ → DONE (see below): a sweep-sized follower energy
+  budget (`SignalingConfig::survival_tuned`, `run-signaling --survival`)
+  lets followers outlive the sweep and live off the emitter's pulled-in
+  energy.
+- Signal-gradient observation (`nearby_signal_left`/`right`) so followers
+  can steer toward the emitter instead of sweeping blindly — shared
+  substrate with chemical-field meaning formation.
 - Multi-subject LLM run after the rule-level economics sustain followers.
+
+## SURVIVAL-TUNED RUN (OBSERVED, n=5 seeds, 600 ticks, 6 followers)
+
+`SignalingConfig::survival_tuned`: follower start energy = 600 ×
+metabolism (0.05) + 10 headroom = 40 units (vs 12 default).
+
+| seed | proximity | nullProx | intake/tick | nullIntake | alive | emitter |
+|------|-----------|----------|-------------|------------|-------|---------|
+| 42   | 0.278     | 0.276    | 0.727       | 0.276      | 5     | true    |
+| 7    | 0.275     | 0.275    | 0.729       | 0.276      | 5     | true    |
+| 99   | 0.274     | 0.274    | 0.724       | 0.272      | 5     | true    |
+| 123  | 0.273     | 0.271    | 0.727       | 0.276      | 5     | true    |
+| 2024 | 0.275     | 0.276    | 0.729       | 0.275      | 5     | true    |
+
+- **Survival economics fixed**: 5/6 followers survive all 600 ticks in
+  5/5 seeds (the default budget killed 6/6); the emitter survives 5/5.
+- **Harvest strengthens**: intake ≈0.73/tick vs null ≈0.28 (**≈2.6×**,
+  up from ≈2.1× — surviving followers spend more time harvesting at the
+  emitter's node).
+- **Attraction narrows**: proximity 0.273-0.278 vs null 0.271-0.276
+  (4/5 seeds, small margin). With survival, the null-run followers also
+  linger near their start nodes, so positional clustering adds little
+  beyond what staying-put already yields. The harvest advantage is the
+  robust effect; true *steering* toward the emitter needs a signal
+  gradient observation (queued).
 
 ## CAVEATS
 

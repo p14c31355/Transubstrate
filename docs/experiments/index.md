@@ -26,6 +26,7 @@ kept, and nothing here claims emergence.
 | 17 | LLM 5-dimension sweep (memory_usage numbers) | docs/experiments/llm-usage-sweep.md | OBSERVED (n=5 temp 0.3: 4/5 usage 1.0 (swap-robust); seed 123 full strategy replacement 0/0/0 — learning loop visible in vector) |
 | 18 | Cross-model outcome learning (qwen, signal pull) | docs/experiments/cross-model-outcome-learning.md | OBSERVED (4/4 complete runs mix SIGNAL+HOP post-swap with no channel meaning; 1 death/run — aggressive exploration measured) |
 | 18 | Signaling-follower detection (multi-subject) | docs/experiments/signaling-followers.md | OBSERVED mixed (attraction 5/5 and intake ~2.1x vs null; survival economics fail under current params — negative result disclosed) |
+| 19 | Memory ablation (causal carry-vs-wipe) | docs/experiments/memory-ablation.md | OBSERVED: rule calibration 0.0 (true negative); LLM n=5 behavioral +0.50 / retention +0.55 / usage +0.80 — with disclosed pre-phase confound |
 
 ## Running an experiment
 
